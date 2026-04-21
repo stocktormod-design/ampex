@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { withMetadataBase } from "@/lib/metadata-base";
 import "./globals.css";
 
 const inter = Inter({
@@ -8,11 +9,11 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withMetadataBase({
   title: "Ampex — prosjektstyring for elektro",
   description:
     "Samlet oversikt over prosjekter, tegninger og team for norske elektroentreprenorer.",
-};
+});
 
 export default function RootLayout({
   children,
