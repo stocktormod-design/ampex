@@ -29,3 +29,11 @@ npx supabase link
 npm run db:migration:list
 npm run db:push
 ```
+
+## Feil: `invalid input value for enum app_role: "apprentice"`
+
+Skjer ofte hvis `20260422120000` er **registrert** i migrasjonshistorikk, men **ikke** faktisk kjørt på databasen.
+
+**Anbefalt:** kjør `npm run db:push` — migrasjonen `20260424120000_fix_app_role_enum.sql` retter enum idempotent.
+
+**Alternativ:** kjør `scripts/fix_app_role_enum.sql` i SQL Editor (samme innhold).
