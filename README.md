@@ -22,7 +22,7 @@ Appen kjores pa [http://localhost:3000](http://localhost:3000).
 
 ## Struktur
 
-- `app` - routes og layouts
-- `components` - UI-komponenter
-- `lib` - hjelpekode, inkludert Supabase-klienter
-- `types` - felles TypeScript-typer
+- `app` — routes og layouts (frontend nullstilt; bygg pa nytt her)
+- `lib/supabase` — klient for browser, server (cookies), service role (server-only)
+- `supabase/migrations` — Postgres schema, RLS, triggers (uendret)
+- `types` — felles TypeScript-typer (f.eks. database types)

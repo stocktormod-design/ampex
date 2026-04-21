@@ -1,19 +1,5 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
-import { DebugChrome } from "@/components/debug-chrome";
-import { isAmpexDebugEnabled } from "@/lib/debug";
 import "./globals.css";
-
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
 
 export const metadata: Metadata = {
   title: "Ampex",
@@ -22,17 +8,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="no" className="font-sans">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased${isAmpexDebugEnabled() ? " pb-14" : ""}`}
-      >
-        {children}
-        <DebugChrome />
-      </body>
+    <html lang="no">
+      <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
 }
