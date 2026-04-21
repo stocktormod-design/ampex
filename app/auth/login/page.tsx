@@ -18,18 +18,23 @@ type LoginPageProps = {
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  let hasSession = false;
   let configError: string | null = null;
+
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      redirect("/dashboard");
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      hasSession = true;
     }
   } catch (error) {
     configError =
       error instanceof Error ? error.message : "Klarte ikke koble til innlogging.";
+  }
+
+  // Viktig: redirect() ma IKKE sta inne i try/catch — Next kaster NEXT_REDIRECT.
+  if (hasSession) {
+    redirect("/dashboard");
   }
 
   if (configError) {

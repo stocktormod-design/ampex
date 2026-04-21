@@ -18,16 +18,19 @@ type RegisterPageProps = {
 };
 
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  let hasSession = false;
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      redirect("/dashboard");
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data.user) {
+      hasSession = true;
     }
   } catch {
     // Vis skjema — feil handteres ved submit
+  }
+
+  if (hasSession) {
+    redirect("/dashboard");
   }
 
   return (

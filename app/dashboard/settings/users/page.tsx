@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { UserPlus, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -146,6 +147,9 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
       redirect("/dashboard/settings/users?success=1");
     } catch (error) {
+      if (isRedirectError(error)) {
+        throw error;
+      }
       const message =
         error instanceof Error ? error.message : "Ukjent feil ved opprettelse av bruker";
       redirect(`/dashboard/settings/users?error=${encodeURIComponent(message)}`);
