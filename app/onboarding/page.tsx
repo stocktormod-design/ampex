@@ -22,11 +22,12 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
     redirect("/auth/login");
   }
 
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from("profiles")
     .select("company_id")
     .eq("id", user.id)
     .maybeSingle();
+  const profile = profileData as { company_id?: string | null } | null;
 
   if (profile?.company_id) {
     redirect("/dashboard");
@@ -47,7 +48,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       redirect("/auth/login");
     }
 
-    const { data: company, error: companyError } = await actionClient
+    const { data: companyData, error: companyError } = await actionClient
       .from("companies")
       .insert({
         name: companyName,
@@ -55,6 +56,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       })
       .select("id")
       .single();
+    const company = companyData as { id: string };
 
     if (companyError) {
       redirect(`/onboarding?error=${encodeURIComponent(companyError.message)}`);

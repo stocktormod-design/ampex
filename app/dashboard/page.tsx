@@ -7,11 +7,12 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from("profiles")
     .select("full_name, role")
     .eq("id", user?.id ?? "")
     .maybeSingle();
+  const profile = profileData as { full_name?: string | null; role?: string | null } | null;
 
   return (
     <main className="space-y-4">
