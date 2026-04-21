@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import { UserPlus, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -27,6 +29,12 @@ type CompanyUser = {
   created_at: string;
 };
 
+function roleBadgeVariant(role: string) {
+  if (role === "owner") return "default" as const;
+  if (role === "admin") return "secondary" as const;
+  return "outline" as const;
+}
+
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const supabase = await createClient();
   const {
@@ -39,10 +47,10 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
   const { data: profileData } = await supabase
     .from("profiles")
-    .select("company_id, role")
+    .select("company_id, role, companies(name)")
     .eq("id", user.id)
     .maybeSingle();
-  const profile = profileData as CompanyProfile | null;
+  const profile = profileData as (CompanyProfile & { companies?: { name: string } | null }) | null;
 
   if (!profile?.company_id) {
     redirect("/onboarding");
@@ -51,6 +59,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   if (!["owner", "admin"].includes(profile.role)) {
     redirect("/dashboard");
   }
+
+  const companyName =
+    profile.companies && typeof profile.companies === "object" && "name" in profile.companies
+      ? (profile.companies as { name: string }).name
+      : null;
 
   const { data: usersData } = await supabase
     .from("profiles")
@@ -140,95 +153,132 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   }
 
   return (
-    <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Brukeradministrasjon</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Owner og admin kan opprette brukere i eget firma.
-        </p>
+    <main className="space-y-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex gap-4">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Users className="size-6" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Brukere</h1>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              Owner og admin kan legge til nye brukere i{" "}
+              <span className="font-medium text-foreground">{companyName ?? "firmaet"}</span>.
+              Nye brukere kan logge inn med e-post og passord du setter her.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Opprett ny bruker</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={createUser} className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Navn</Label>
-              <Input id="full_name" name="full_name" required />
+      <div className="grid gap-6 lg:grid-cols-5">
+        <Card className="border shadow-sm lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <UserPlus className="size-5 text-muted-foreground" aria-hidden />
+              <CardTitle className="text-lg">Ny bruker</CardTitle>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefon</Label>
-              <Input id="phone" name="phone" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">E-post</Label>
-              <Input id="email" name="email" type="email" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Passord</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="role">Rolle</Label>
-              <select
-                id="role"
-                name="role"
-                className="flex h-8 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                defaultValue="worker"
-              >
-                <option value="worker">Worker</option>
-                <option value="admin">Admin</option>
-                {profile.role === "owner" ? <option value="owner">Owner</option> : null}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <Button type="submit">Opprett bruker</Button>
-            </div>
-          </form>
-
-          <p className="mt-4 text-xs text-muted-foreground">
-            Dev-test: Opprett bruker med navn <strong>Tormod</strong> og ønsket passord her.
-          </p>
-
-          {searchParams?.error ? (
-            <Alert className="mt-4" variant="destructive">
-              <AlertDescription>{searchParams.error}</AlertDescription>
-            </Alert>
-          ) : null}
-          {searchParams?.success ? (
-            <Alert className="mt-4">
-              <AlertDescription>Bruker ble opprettet.</AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Brukere i firmaet</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {users.map((companyUser) => (
-            <div
-              key={companyUser.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
-            >
-              <div>
-                <p className="font-medium">{companyUser.full_name || "Uten navn"}</p>
-                <p className="text-muted-foreground">{companyUser.phone || "Ingen telefon"}</p>
+            <CardDescription>Fyll ut skjemaet og send invitasjonen videre på e-post.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form action={createUser} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="full_name">Fullt navn</Label>
+                <Input id="full_name" name="full_name" required placeholder="Ola Nordmann" />
               </div>
-              <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium uppercase">
-                {companyUser.role}
-              </span>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefon</Label>
+                <Input id="phone" name="phone" type="tel" placeholder="+47 …" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">E-post</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="navn@firma.no"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Passord</Label>
+                <Input id="password" name="password" type="password" required minLength={6} />
+                <p className="text-xs text-muted-foreground">
+                  Må oppfylle passordkrav i Supabase (ofte minst 6 tegn).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Rolle</Label>
+                <select
+                  id="role"
+                  name="role"
+                  className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  defaultValue="worker"
+                >
+                  <option value="worker">Montør / worker</option>
+                  <option value="admin">Admin</option>
+                  {profile.role === "owner" ? <option value="owner">Owner</option> : null}
+                </select>
+              </div>
+
+              {searchParams?.error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{searchParams.error}</AlertDescription>
+                </Alert>
+              ) : null}
+              {searchParams?.success ? (
+                <Alert>
+                  <AlertDescription>Bruker ble opprettet.</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <Button type="submit" className="w-full sm:w-auto">
+                Opprett bruker
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle className="text-lg">Team</CardTitle>
+              <CardDescription>{users.length} bruker{users.length === 1 ? "" : "e"}</CardDescription>
             </div>
-          ))}
-          {users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ingen brukere funnet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y border-t">
+              <div className="grid grid-cols-[1fr_auto] gap-2 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <span>Navn</span>
+                <span className="text-right">Rolle</span>
+              </div>
+              {users.map((companyUser) => (
+                <div
+                  key={companyUser.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {companyUser.full_name?.trim() || "Uten navn"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {companyUser.phone?.trim() || "—"}
+                    </p>
+                  </div>
+                  <Badge variant={roleBadgeVariant(companyUser.role)} className="capitalize">
+                    {companyUser.role}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+            {users.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                Ingen brukere i lista ennå.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }
