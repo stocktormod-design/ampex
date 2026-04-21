@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +49,9 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       redirect("/auth/login");
     }
 
-    const { data: companyData, error: companyError } = await actionClient
+    const adminClient = createAdminClient();
+
+    const { data: companyData, error: companyError } = await adminClient
       .from("companies")
       .insert({
         name: companyName,
@@ -62,7 +65,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       redirect(`/onboarding?error=${encodeURIComponent(companyError.message)}`);
     }
 
-    const { error: profileError } = await actionClient
+    const { error: profileError } = await adminClient
       .from("profiles")
       .update({
         company_id: company.id,
