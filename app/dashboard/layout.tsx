@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type ProfileRow = {
   company_id: string | null;
-  role: "owner" | "admin" | "worker";
+  role: string;
   companies: { name: string } | null;
 } | null;
 
@@ -56,7 +56,10 @@ export default async function DashboardLayout({
                 <span className="text-xs text-muted-foreground">Dashbord</span>
               )}
             </Link>
-            <DashboardNavLinks canManageUsers={Boolean(canManageUsers)} />
+            <DashboardNavLinks
+              canManageUsers={Boolean(canManageUsers)}
+              canManageLager={Boolean(canManageUsers)}
+            />
           </div>
           <div className="flex items-center justify-between gap-3 sm:justify-end">
             <span className="hidden max-w-[220px] truncate text-xs text-muted-foreground sm:inline">

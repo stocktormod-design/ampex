@@ -3,10 +3,11 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminRole, isAssignableRole, type AppRole } from "@/lib/roles";
 
 type CompanyProfile = {
   company_id: string | null;
-  role: "owner" | "admin" | "worker";
+  role: string;
 };
 
 export async function createUser(formData: FormData) {
@@ -14,7 +15,12 @@ export async function createUser(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
-  const requestedRole = String(formData.get("role") ?? "worker") as "owner" | "admin" | "worker";
+  const requestedRoleRaw = String(formData.get("role") ?? "montor");
+
+  if (!isAssignableRole(requestedRoleRaw)) {
+    redirect("/dashboard/settings/users?error=Ugyldig+rolle");
+  }
+  const requestedRole = requestedRoleRaw as AppRole;
 
   const actionClient = await createClient();
   const {
@@ -32,7 +38,7 @@ export async function createUser(formData: FormData) {
     .maybeSingle();
   const currentProfile = currentProfileData as CompanyProfile | null;
 
-  if (!currentProfile?.company_id || !["owner", "admin"].includes(currentProfile.role)) {
+  if (!currentProfile?.company_id || !isAdminRole(currentProfile.role)) {
     redirect("/dashboard/settings/users?error=Du+har+ikke+tilgang");
   }
 

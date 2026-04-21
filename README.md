@@ -18,11 +18,17 @@ Prosjektstyringsapp for norske elektroentreprenorer.
 npm run dev
 ```
 
-Appen kjores pa [http://localhost:3000](http://localhost:3000).
+Appen kjøres på [http://localhost:3000](http://localhost:3000).
+
+## Vercel (ampex-v1ke)
+
+- Knytt **GitHub-repoet** til **ett** Vercel-prosjekt (f.eks. **ampex-v1ke**), og arkiver duplikat-prosjekter for å unngå rot med URL-er og miljøvariabler.
+- Sett **`NEXT_PUBLIC_APP_URL`** til den faktiske produksjons-URL-en for det prosjektet (f.eks. `https://…v1ke….vercel.app`).
+- Etter databaseendringer: kjør migrasjoner mot Supabase (`supabase db push` eller SQL fra `supabase/migrations/` i dashboard).
 
 ## Struktur
 
-- `app` — landing (`/`), auth (`/auth/*`), onboarding, dashboard
+- `app` — landing (`/`), auth (`/auth/*`), onboarding, dashboard, **lager** (`/dashboard/lager`)
 - `components` — landing-seksjoner, `ui/*`, navigasjon
 - `lib/supabase` — browser-, server- og admin-klient; `middleware.ts` for sesjon
 - `supabase/migrations` — schema, RLS, triggers

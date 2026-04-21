@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+import { roleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -52,12 +53,20 @@ export default async function DashboardHomePage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {profile.role === "owner" || profile.role === "admin" ? (
-              <Link
-                href="/dashboard/settings/users"
-                className={cn(buttonVariants({ variant: "default" }), "inline-flex")}
-              >
-                Administrer brukere
-              </Link>
+              <>
+                <Link
+                  href="/dashboard/lager"
+                  className={cn(buttonVariants({ variant: "default" }), "inline-flex")}
+                >
+                  Lager
+                </Link>
+                <Link
+                  href="/dashboard/settings/users"
+                  className={cn(buttonVariants({ variant: "secondary" }), "inline-flex")}
+                >
+                  Administrer brukere
+                </Link>
+              </>
             ) : null}
             <Link href="/" className={cn(buttonVariants({ variant: "outline" }), "inline-flex")}>
               Til forsiden
@@ -71,7 +80,7 @@ export default async function DashboardHomePage() {
           </CardHeader>
           <CardContent>
             <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-              <li>Rolle: {profile.role}</li>
+              <li>Rolle: {roleLabel(profile.role)}</li>
               <li>Firma koblet til profil</li>
             </ul>
           </CardContent>

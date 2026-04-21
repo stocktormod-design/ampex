@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { createUser } from "@/app/dashboard/settings/users/actions";
 import { createClient } from "@/lib/supabase/server";
+import { roleLabel } from "@/lib/roles";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
@@ -16,20 +17,21 @@ type UsersPageProps = {
 
 type CompanyProfile = {
   company_id: string | null;
-  role: "owner" | "admin" | "worker";
+  role: string;
 };
 
 type CompanyUser = {
   id: string;
   full_name: string | null;
   phone: string | null;
-  role: "owner" | "admin" | "worker";
+  role: string;
   created_at: string;
 };
 
 function roleClass(role: string) {
   if (role === "owner") return "bg-primary/15 text-primary";
   if (role === "admin") return "bg-secondary text-secondary-foreground";
+  if (role === "apprentice") return "border border-amber-200/80 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100";
   return "border border-border bg-muted/50 text-muted-foreground";
 }
 
@@ -125,9 +127,10 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                   id="role"
                   name="role"
                   className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  defaultValue="worker"
+                  defaultValue="montor"
                 >
-                  <option value="worker">Montør / worker</option>
+                  <option value="montor">Montør</option>
+                  <option value="apprentice">Lærling</option>
                   <option value="admin">Admin</option>
                   {profile.role === "owner" ? <option value="owner">Owner</option> : null}
                 </select>
@@ -172,9 +175,9 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                     </p>
                   </div>
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleClass(u.role)}`}
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${roleClass(u.role)}`}
                   >
-                    {u.role}
+                    {roleLabel(u.role)}
                   </span>
                 </div>
               ))}
