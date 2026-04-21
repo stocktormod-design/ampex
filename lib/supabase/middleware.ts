@@ -8,6 +8,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Ikke kjor cookie-refresh/getUser pa innloggingsskjema — mindre risiko pa Edge/Vercel.
+  if (pathname === "/auth/login" || pathname === "/auth/register") {
+    return NextResponse.next();
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -36,10 +41,6 @@ export async function updateSession(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
-    if (user && (pathname === "/auth/login" || pathname === "/auth/register")) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
 
     const isProtectedRoute =
       pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");
