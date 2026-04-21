@@ -2,10 +2,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { NativeInput } from "@/components/ui/native-input";
+import { NativeLabel } from "@/components/ui/native-label";
+import { SubmitButton } from "@/components/ui/submit-button";
+
+export const dynamic = "force-dynamic";
 
 type OnboardingPageProps = {
   searchParams?: {
@@ -89,21 +91,26 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
         <CardContent>
           <form action={createCompany} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Firmanavn</Label>
-              <Input id="name" name="name" required />
+              <NativeLabel htmlFor="name">Firmanavn</NativeLabel>
+              <NativeInput id="name" name="name" required autoComplete="organization" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="org_number">Organisasjonsnummer</Label>
-              <Input id="org_number" name="org_number" pattern="[0-9]{9}" required />
+              <NativeLabel htmlFor="org_number">Organisasjonsnummer</NativeLabel>
+              <NativeInput
+                id="org_number"
+                name="org_number"
+                pattern="[0-9]{9}"
+                required
+                inputMode="numeric"
+                autoComplete="off"
+              />
             </div>
             {searchParams?.error ? (
               <Alert variant="destructive">
                 <AlertDescription>{searchParams.error}</AlertDescription>
               </Alert>
             ) : null}
-            <Button className="w-full" type="submit">
-              Opprett firma
-            </Button>
+            <SubmitButton className="w-full">Opprett firma</SubmitButton>
           </form>
         </CardContent>
       </Card>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardNavLinks } from "@/components/dashboard-nav";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 type ProfileWithCompany = {
   company_id: string | null;
@@ -60,9 +60,9 @@ export default async function DashboardLayout({
               {user.email}
             </span>
             <form action={signOut}>
-              <Button variant="outline" size="sm" type="submit">
+              <SubmitButton variant="outline" size="sm">
                 Logg ut
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </div>

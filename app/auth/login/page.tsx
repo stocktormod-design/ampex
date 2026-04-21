@@ -2,10 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { NativeInput } from "@/components/ui/native-input";
+import { NativeLabel } from "@/components/ui/native-label";
+import { SubmitButton } from "@/components/ui/submit-button";
+
+export const dynamic = "force-dynamic";
 
 type LoginPageProps = {
   searchParams?: {
@@ -42,21 +44,25 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
           <form action={login} className="space-y-4">
             <input type="hidden" name="next" defaultValue={searchParams?.next ?? "/dashboard"} />
             <div className="space-y-2">
-              <Label htmlFor="email">E-post</Label>
-              <Input id="email" name="email" type="email" required />
+              <NativeLabel htmlFor="email">E-post</NativeLabel>
+              <NativeInput id="email" name="email" type="email" required autoComplete="email" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Passord</Label>
-              <Input id="password" name="password" type="password" required />
+              <NativeLabel htmlFor="password">Passord</NativeLabel>
+              <NativeInput
+                id="password"
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+              />
             </div>
             {searchParams?.error ? (
               <Alert variant="destructive">
                 <AlertDescription>{searchParams.error}</AlertDescription>
               </Alert>
             ) : null}
-            <Button className="w-full" type="submit">
-              Logg inn
-            </Button>
+            <SubmitButton className="w-full">Logg inn</SubmitButton>
           </form>
           <p className="mt-4 text-sm text-muted-foreground">
             Har du ikke konto?{" "}

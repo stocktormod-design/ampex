@@ -4,10 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { NativeInput } from "@/components/ui/native-input";
+import { NativeLabel } from "@/components/ui/native-label";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 type UsersPageProps = {
   searchParams?: {
@@ -182,16 +182,22 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
           <CardContent className="space-y-4">
             <form action={createUser} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="full_name">Fullt navn</Label>
-                <Input id="full_name" name="full_name" required placeholder="Ola Nordmann" />
+                <NativeLabel htmlFor="full_name">Fullt navn</NativeLabel>
+                <NativeInput
+                  id="full_name"
+                  name="full_name"
+                  required
+                  placeholder="Ola Nordmann"
+                  autoComplete="name"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Telefon</Label>
-                <Input id="phone" name="phone" type="tel" placeholder="+47 …" />
+                <NativeLabel htmlFor="phone">Telefon</NativeLabel>
+                <NativeInput id="phone" name="phone" type="tel" placeholder="+47 …" autoComplete="tel" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">E-post</Label>
-                <Input
+                <NativeLabel htmlFor="email">E-post</NativeLabel>
+                <NativeInput
                   id="email"
                   name="email"
                   type="email"
@@ -201,14 +207,21 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Passord</Label>
-                <Input id="password" name="password" type="password" required minLength={6} />
+                <NativeLabel htmlFor="password">Passord</NativeLabel>
+                <NativeInput
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
                 <p className="text-xs text-muted-foreground">
                   Må oppfylle passordkrav i Supabase (ofte minst 6 tegn).
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role">Rolle</Label>
+                <NativeLabel htmlFor="role">Rolle</NativeLabel>
                 <select
                   id="role"
                   name="role"
@@ -232,9 +245,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 </Alert>
               ) : null}
 
-              <Button type="submit" className="w-full sm:w-auto">
-                Opprett bruker
-              </Button>
+              <SubmitButton className="w-full sm:w-auto">Opprett bruker</SubmitButton>
             </form>
           </CardContent>
         </Card>
