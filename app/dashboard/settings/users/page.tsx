@@ -3,6 +3,7 @@ import { isRedirectError } from "next/dist/client/components/redirect";
 import { UserPlus, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { debugLog } from "@/lib/debug";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -122,12 +123,24 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       });
 
       if (createError || !createdUser.user) {
+        debugLog("users.createUser", {
+          step: "admin.createUser",
+          ok: false,
+          message: createError?.message ?? "missing user",
+        });
         redirect(
           `/dashboard/settings/users?error=${encodeURIComponent(
             createError?.message ?? "Klarte ikke opprette bruker",
           )}`,
         );
       }
+
+      debugLog("users.createUser", {
+        step: "admin.createUser",
+        ok: true,
+        newUserId: createdUser.user.id,
+        role: requestedRole,
+      });
 
       const { error: updateProfileError } = await adminClient
         .from("profiles")
@@ -140,11 +153,17 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         .eq("id", createdUser.user.id);
 
       if (updateProfileError) {
+        debugLog("users.createUser", {
+          step: "profiles.update",
+          ok: false,
+          message: updateProfileError.message,
+        });
         redirect(
           `/dashboard/settings/users?error=${encodeURIComponent(updateProfileError.message)}`,
         );
       }
 
+      debugLog("users.createUser", { step: "done", ok: true });
       redirect("/dashboard/settings/users?success=1");
     } catch (error) {
       if (isRedirectError(error)) {
@@ -152,6 +171,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       }
       const message =
         error instanceof Error ? error.message : "Ukjent feil ved opprettelse av bruker";
+      debugLog("users.createUser", { step: "catch", ok: false, message });
       redirect(`/dashboard/settings/users?error=${encodeURIComponent(message)}`);
     }
   }

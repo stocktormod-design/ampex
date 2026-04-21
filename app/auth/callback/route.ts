@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { debugLog } from "@/lib/debug";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -8,7 +9,14 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    debugLog("auth.callback", {
+      hasCode: true,
+      exchangeError: error?.message ?? null,
+      nextParam: next,
+    });
+  } else {
+    debugLog("auth.callback", { hasCode: false, nextParam: next });
   }
 
   const redirectUrl = new URL(next, request.url);

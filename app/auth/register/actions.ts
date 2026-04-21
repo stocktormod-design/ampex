@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { debugLog } from "@/lib/debug";
 import { createClient } from "@/lib/supabase/server";
 
 export async function signUp(formData: FormData) {
@@ -24,6 +25,19 @@ export async function signUp(formData: FormData) {
         phone,
       },
     },
+  });
+
+  debugLog("auth.signUp", {
+    hasError: Boolean(error),
+    errorMessage: error?.message ?? null,
+    callbackHost: (() => {
+      try {
+        return new URL(callbackUrl).host;
+      } catch {
+        return "ugyldig";
+      }
+    })(),
+    emailDomain: email.includes("@") ? email.split("@")[1] ?? "?" : "invalid",
   });
 
   if (error) {
