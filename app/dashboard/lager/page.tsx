@@ -62,8 +62,8 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Lager</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Admin oppretter lagre (f.eks. båtlager). I hvert lager registrerer du varer med strekkode — skann én gang,
-            fyll inn navn, så ligger varen klar ved neste skanning.
+            Admin oppretter lagre (f.eks. båtlager). I hvert lager registreres varer med strekkode
+            (skann eller skriv), og kan redigeres manuelt uten kamera.
           </p>
         </div>
       </div>
@@ -75,26 +75,6 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
       ) : null}
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <Card className="border shadow-sm lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-lg">Nytt lager</CardTitle>
-            <CardDescription>F.eks. «Båtlager», «Kontor», «Bil 12».</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createWarehouse} className="space-y-4">
-              <div className="space-y-2">
-                <NativeLabel htmlFor="name">Navn</NativeLabel>
-                <NativeInput id="name" name="name" required placeholder="Båtlager" autoComplete="off" />
-              </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="location">Plassering (valgfritt)</NativeLabel>
-                <NativeInput id="location" name="location" placeholder="Kaia 4" autoComplete="off" />
-              </div>
-              <SubmitButton className="w-full">Opprett lager</SubmitButton>
-            </form>
-          </CardContent>
-        </Card>
-
         <Card className="border shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Dine lagre</CardTitle>
@@ -104,7 +84,10 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
           </CardHeader>
           <CardContent>
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Ingen lagre ennå. Opprett det første til venstre.</p>
+              <p className="text-sm text-muted-foreground">
+                Ingen lagre ennå. Opprett det første i skjemaet under (eller til høyre på store
+                skjermer).
+              </p>
             ) : (
               <ul className="divide-y rounded-lg border">
                 {rows.map((w) => (
@@ -122,6 +105,26 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
                 ))}
               </ul>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-lg">Nytt lager</CardTitle>
+            <CardDescription>F.eks. «Båtlager», «Kontor», «Bil 12».</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={createWarehouse} className="space-y-4">
+              <div className="space-y-2">
+                <NativeLabel htmlFor="name">Navn</NativeLabel>
+                <NativeInput id="name" name="name" required placeholder="Båtlager" autoComplete="off" />
+              </div>
+              <div className="space-y-2">
+                <NativeLabel htmlFor="location">Plassering (valgfritt)</NativeLabel>
+                <NativeInput id="location" name="location" placeholder="Kaia 4" autoComplete="off" />
+              </div>
+              <SubmitButton className="w-full">Opprett lager</SubmitButton>
+            </form>
           </CardContent>
         </Card>
       </div>

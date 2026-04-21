@@ -8,7 +8,7 @@ const features = [
   },
   {
     title: "Lager og strekkode",
-    body: "Opprett lagre, registrer varer med strekkode eller QR fra telefon.",
+    body: "Opprett lagre, registrer varer med strekkode fra telefon — eller skriv inn manuelt.",
     Icon: Package,
   },
   {

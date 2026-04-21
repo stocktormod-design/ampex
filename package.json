@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migration:list": "npx supabase migration list --linked",
+    "db:push": "npx supabase db push --linked",
+    "db:repair:warehouse-barcodes": "npx supabase migration repair 20260423120000 --status applied --linked --yes",
+    "db:repair:baseline": "npx supabase migration repair 20260421171500 20260421172000 20260421192000 20260422120000 20260423120000 --status applied --linked --yes"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

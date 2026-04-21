@@ -13,8 +13,8 @@ export function Hero() {
           Oversikt over firma, prosjekter og lager.
         </h1>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-          Ampex er under utvikling: innlogging, brukere og lager med strekkode/QR er på plass. Flere
-          moduler kommer etter hvert.
+          Ampex er under utvikling: innlogging, brukere og lager med strekkode er på plass.
+          Flere moduler kommer etter hvert.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/auth/register" className={cn(buttonVariants({ size: "lg" }))}>

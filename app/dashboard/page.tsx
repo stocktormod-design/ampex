@@ -41,8 +41,8 @@ export default async function DashboardHomePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hei, {name}</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Velkommen til dashbordet. Her legger vi prosjekter, tegninger og lager — når modulene er
-          klare.
+          Velkommen til dashbordet. Her samles prosjekter, tegninger og lager etter hvert som modulene
+          blir klare.
         </p>
       </div>
       <div className="grid gap-6 md:grid-cols-2">

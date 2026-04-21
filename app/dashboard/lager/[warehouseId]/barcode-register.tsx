@@ -1,8 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { lookupBarcode, registerWarehouseItem } from "@/app/dashboard/lager/actions";
+
+/** Vanlige 1D-strekkoder (ikke QR / 2D). */
+const LINEAR_BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.RSS_14,
+  Html5QrcodeSupportedFormats.RSS_EXPANDED,
+];
 
 type Props = {
   warehouseId: string;
@@ -19,7 +35,7 @@ export function BarcodeRegister({ warehouseId }: Props) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [readerId] = useState(() => `ampex-qr-${Math.random().toString(36).slice(2, 11)}`);
+  const [readerId] = useState(() => `ampex-bc-${Math.random().toString(36).slice(2, 11)}`);
 
   const applyLookupResult = useCallback((res: Awaited<ReturnType<typeof lookupBarcode>>) => {
     if (!res.ok) {
@@ -63,12 +79,21 @@ export function BarcodeRegister({ warehouseId }: Props) {
       if (cancelled) return;
 
       try {
-        const scanner = new Html5Qrcode(readerId, { verbose: false });
+        const scanner = new Html5Qrcode(readerId, {
+          verbose: false,
+          formatsToSupport: LINEAR_BARCODE_FORMATS,
+          useBarCodeDetectorIfSupported: true,
+        });
         scannerRef.current = scanner;
-        const w = typeof window !== "undefined" ? Math.min(280, window.innerWidth - 48) : 260;
+        const viewW = typeof window !== "undefined" ? Math.min(340, window.innerWidth - 48) : 300;
+        const viewH = 120;
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 8, qrbox: { width: w, height: w }, aspectRatio: 1 },
+          {
+            fps: 10,
+            qrbox: { width: viewW, height: viewH },
+            aspectRatio: viewW / viewH,
+          },
           (decodedText) => {
             if (cancelled) return;
             cancelled = true;
@@ -140,13 +165,15 @@ export function BarcodeRegister({ warehouseId }: Props) {
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-base font-semibold">Registrer vare med strekkode</h2>
       <p className="text-xs text-muted-foreground">
-        Lim inn strekkode, skann QR med kamera (sjekker automatisk etter skann), eller skriv manuelt
-        og trykk «Sjekk strekkode». Ved ny kode: fyll inn varenavn og lagre.
+        Skriv eller lim inn strekkode og trykk «Sjekk strekkode», eller bruk kamera (sjekker
+        automatisk etter skann). Eksisterende varer finner du i tabellen under — der kan du legge
+        inn flere strekkoder per vare (f.eks. eske og innhold). Ved ny kode: fyll inn varenavn og
+        lagre.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1 space-y-1.5">
           <label htmlFor="bc-scan" className="text-xs font-medium">
-            Strekkode / innhold fra QR
+            Strekkode
           </label>
           <input
             id="bc-scan"
@@ -166,7 +193,7 @@ export function BarcodeRegister({ warehouseId }: Props) {
             }}
             className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium hover:bg-muted"
           >
-            Skann QR
+            Skann strekkode
           </button>
           <button
             type="button"
@@ -230,7 +257,7 @@ export function BarcodeRegister({ warehouseId }: Props) {
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
           role="dialog"
           aria-modal="true"
-          aria-label="QR-skanner"
+          aria-label="Strekkodeskanner"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeCamera();
           }}
@@ -240,7 +267,7 @@ export function BarcodeRegister({ warehouseId }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">Pek kameraet mot QR-koden</p>
+              <p className="text-sm font-medium">Pek kameraet mot strekkoden</p>
               <button
                 type="button"
                 onClick={closeCamera}
@@ -249,9 +276,10 @@ export function BarcodeRegister({ warehouseId }: Props) {
                 Lukk
               </button>
             </div>
-            <div id={readerId} className="mt-3 min-h-[240px] overflow-hidden rounded-lg bg-black" />
+            <div id={readerId} className="mt-3 min-h-[200px] overflow-hidden rounded-lg bg-black" />
             <p className="mt-2 text-xs text-muted-foreground">
-              Krever HTTPS (produksjon) eller localhost. På iPhone: tillat kamera for nettleseren.
+              Hold strekkoden horisontalt innenfor rammen. Krever HTTPS (produksjon) eller
+              localhost. På iPhone: tillat kamera for nettleseren.
             </p>
           </div>
         </div>
