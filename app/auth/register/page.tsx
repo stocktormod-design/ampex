@@ -16,7 +16,19 @@ type RegisterPageProps = {
   };
 };
 
-export default function RegisterPage({ searchParams }: RegisterPageProps) {
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      redirect("/dashboard");
+    }
+  } catch {
+    // Vis skjema — feil handteres ved submit
+  }
+
   async function register(formData: FormData) {
     "use server";
 

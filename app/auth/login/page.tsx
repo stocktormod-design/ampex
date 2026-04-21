@@ -16,7 +16,21 @@ type LoginPageProps = {
   };
 };
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  let configError: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      redirect("/dashboard");
+    }
+  } catch (error) {
+    configError =
+      error instanceof Error ? error.message : "Klarte ikke koble til innlogging.";
+  }
+
   async function login(formData: FormData) {
     "use server";
 
@@ -32,6 +46,26 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
     }
 
     redirect(next);
+  }
+
+  if (configError) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8">
+        <Card className="w-full border-destructive/50">
+          <CardHeader>
+            <CardTitle>Konfigurasjonsfeil</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>{configError}</p>
+            <p>
+              Sjekk at <code className="rounded bg-muted px-1">NEXT_PUBLIC_SUPABASE_URL</code> og{" "}
+              <code className="rounded bg-muted px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> er satt
+              i Vercel → Settings → Environment Variables (og redeploy).
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
   }
 
   return (

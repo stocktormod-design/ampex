@@ -2,6 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Ikke kjor Supabase cookie-refresh pa /auth/* — unngar Edge-feil med
+  // request.cookies.set og 500 pa innloggingssider.
+  if (pathname.startsWith("/auth")) {
+    return NextResponse.next({ request });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -31,8 +39,6 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { pathname } = request.nextUrl;
-    const isAuthRoute = pathname.startsWith("/auth");
     const isProtectedRoute =
       pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");
 
@@ -40,13 +46,6 @@ export async function updateSession(request: NextRequest) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/auth/login";
       redirectUrl.searchParams.set("next", pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    if (user && isAuthRoute && pathname !== "/auth/callback") {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
-      redirectUrl.search = "";
       return NextResponse.redirect(redirectUrl);
     }
 
