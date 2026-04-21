@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { lookupBarcode, registerWarehouseItem } from "@/app/dashboard/lager/actions";
 
 type Props = {
@@ -15,6 +16,68 @@ export function BarcodeRegister({ warehouseId }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [readerId] = useState(() => `ampex-qr-${Math.random().toString(36).slice(2, 11)}`);
+
+  useEffect(() => {
+    if (!cameraOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const start = async () => {
+      await new Promise((r) => setTimeout(r, 100));
+      if (cancelled) return;
+
+      try {
+        const scanner = new Html5Qrcode(readerId, { verbose: false });
+        scannerRef.current = scanner;
+        const w = typeof window !== "undefined" ? Math.min(280, window.innerWidth - 48) : 260;
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 8, qrbox: { width: w, height: w }, aspectRatio: 1 },
+          (decodedText) => {
+            if (cancelled) return;
+            cancelled = true;
+            const text = decodedText.trim();
+            setBarcode(text);
+            setCameraOpen(false);
+            setStep("idle");
+            setFoundName(null);
+            setMessage(text ? "Strekkode fra QR er satt inn. Trykk «Sjekk strekkode»." : null);
+            void scanner
+              .stop()
+              .then(() => scanner.clear())
+              .catch(() => {});
+            scannerRef.current = null;
+          },
+          () => {},
+        );
+      } catch (e) {
+        if (!cancelled) {
+          setCameraError(e instanceof Error ? e.message : "Kunne ikke starte kamera");
+          setCameraOpen(false);
+        }
+      }
+    };
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      if (s) {
+        void s
+          .stop()
+          .then(() => s.clear())
+          .catch(() => {});
+      }
+    };
+  }, [cameraOpen, readerId]);
 
   function onLookup() {
     setError(null);
@@ -55,17 +118,22 @@ export function BarcodeRegister({ warehouseId }: Props) {
     });
   }
 
+  function closeCamera() {
+    setCameraOpen(false);
+    setCameraError(null);
+  }
+
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-base font-semibold">Registrer vare med strekkode</h2>
       <p className="text-xs text-muted-foreground">
-        Skann eller lim inn strekkode, trykk «Sjekk». Finnes den ikke, fyll inn navn og lagre — neste gang gjenkjennes
-        den automatisk.
+        Lim inn strekkode, skann QR med kamera (inneholder ofte strekkode som tekst), eller skriv
+        manuelt. Trykk «Sjekk strekkode»; ved ny kode, fyll inn varenavn og lagre.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1 space-y-1.5">
           <label htmlFor="bc-scan" className="text-xs font-medium">
-            Strekkode
+            Strekkode / innhold fra QR
           </label>
           <input
             id="bc-scan"
@@ -76,15 +144,33 @@ export function BarcodeRegister({ warehouseId }: Props) {
             autoComplete="off"
           />
         </div>
-        <button
-          type="button"
-          disabled={pending || !barcode.trim()}
-          onClick={onLookup}
-          className="h-10 shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          Sjekk strekkode
-        </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setCameraError(null);
+              setCameraOpen(true);
+            }}
+            className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium hover:bg-muted"
+          >
+            Skann QR
+          </button>
+          <button
+            type="button"
+            disabled={pending || !barcode.trim()}
+            onClick={onLookup}
+            className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Sjekk strekkode
+          </button>
+        </div>
       </div>
+
+      {cameraError ? (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {cameraError}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -123,6 +209,38 @@ export function BarcodeRegister({ warehouseId }: Props) {
           >
             Lagre vare
           </button>
+        </div>
+      ) : null}
+
+      {cameraOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="QR-skanner"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeCamera();
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">Pek kameraet mot QR-koden</p>
+              <button
+                type="button"
+                onClick={closeCamera}
+                className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Lukk
+              </button>
+            </div>
+            <div id={readerId} className="mt-3 min-h-[240px] overflow-hidden rounded-lg bg-black" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Krever HTTPS (produksjon) eller localhost. På iPhone: tillat kamera for nettleseren.
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

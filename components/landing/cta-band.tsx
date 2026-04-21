@@ -4,22 +4,16 @@ import { cn } from "@/lib/utils";
 
 export function CtaBand() {
   return (
-    <section className="border-t border-border bg-primary py-16 text-primary-foreground sm:py-20">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 text-center sm:px-6">
-        <h2 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
-          Klar for å strukturere firmaets prosjekter?
-        </h2>
-        <p className="max-w-lg text-sm opacity-90 sm:text-base">
-          Opprett konto, bekreft e-post, legg inn firma — sa er du inne pa dashbordet.
-        </p>
-        <Link
-          href="/auth/register"
-          className={cn(
-            buttonVariants({ size: "lg" }),
-            "bg-white text-primary hover:bg-white/90",
-          )}
-        >
-          Opprett konto
+    <section className="border-b border-border bg-muted/30 py-12 sm:py-14">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Prøv Ampex</h2>
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            Opprett konto, bekreft e-post og legg inn firma — så er du i gang.
+          </p>
+        </div>
+        <Link href="/auth/register" className={cn(buttonVariants({ size: "lg" }), "shrink-0 self-start sm:self-center")}>
+          Registrer
         </Link>
       </div>
     </section>
