@@ -10,7 +10,7 @@ export function SubmitButton({ className, variant, size, ...props }: SubmitButto
   return (
     <button
       type="submit"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   );

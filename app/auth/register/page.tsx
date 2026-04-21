@@ -9,10 +9,12 @@ import { SubmitButton } from "@/components/ui/submit-button";
 export const dynamic = "force-dynamic";
 
 type RegisterPageProps = {
-  searchParams?: { error?: string; success?: string };
+  searchParams?: Promise<{ error?: string; success?: string }> | { error?: string; success?: string };
 };
 
-export default function RegisterPage({ searchParams }: RegisterPageProps) {
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  const sp = searchParams instanceof Promise ? await searchParams : searchParams;
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 py-12">
       <Card className="w-full max-w-md">
@@ -45,12 +47,12 @@ export default function RegisterPage({ searchParams }: RegisterPageProps) {
                 autoComplete="new-password"
               />
             </div>
-            {searchParams?.error ? (
+            {sp?.error ? (
               <Alert variant="destructive">
-                <AlertDescription>{searchParams.error}</AlertDescription>
+                <AlertDescription>{sp.error}</AlertDescription>
               </Alert>
             ) : null}
-            {searchParams?.success ? (
+            {sp?.success ? (
               <Alert>
                 <AlertDescription>
                   Sjekk innboksen din og bekreft e-posten for å fullføre registreringen.

@@ -8,6 +8,6 @@ export type ButtonProps = React.ComponentProps<"button"> &
 
 export function Button({ className, variant, size, ...props }: ButtonProps) {
   return (
-    <button type="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />
+    <button type="button" className={cn(buttonVariants({ variant, size }), className)} {...props} />
   );
 }

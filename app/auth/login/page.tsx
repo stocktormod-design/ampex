@@ -10,11 +10,12 @@ import { safeNextPath } from "@/lib/safe-next-path";
 export const dynamic = "force-dynamic";
 
 type LoginPageProps = {
-  searchParams?: { error?: string; next?: string };
+  searchParams?: Promise<{ error?: string; next?: string }> | { error?: string; next?: string };
 };
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
-  const nextPath = safeNextPath(searchParams?.next);
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const sp = searchParams instanceof Promise ? await searchParams : searchParams;
+  const nextPath = safeNextPath(sp?.next);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 py-12">
@@ -40,9 +41,9 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                 autoComplete="current-password"
               />
             </div>
-            {searchParams?.error ? (
+            {sp?.error ? (
               <Alert variant="destructive">
-                <AlertDescription>{searchParams.error}</AlertDescription>
+                <AlertDescription>{sp.error}</AlertDescription>
               </Alert>
             ) : null}
             <SubmitButton className="w-full">Logg inn</SubmitButton>
