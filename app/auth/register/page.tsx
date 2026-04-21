@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { signUp } from "@/app/auth/register/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,22 +15,8 @@ type RegisterPageProps = {
   };
 };
 
-export default async function RegisterPage({ searchParams }: RegisterPageProps) {
-  let hasSession = false;
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (!error && data.user) {
-      hasSession = true;
-    }
-  } catch {
-    // Vis skjema — feil handteres ved submit
-  }
-
-  if (hasSession) {
-    redirect("/dashboard");
-  }
-
+/** Ingen Supabase/cookies her — sesjon handteres i middleware. */
+export default function RegisterPage({ searchParams }: RegisterPageProps) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
       <Card className="w-full">

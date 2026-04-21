@@ -5,9 +5,9 @@ import { debugLog } from "@/lib/debug";
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Ikke kjor Supabase cookie-refresh pa /auth/* — unngar Edge-problemer pa innlogging.
-  if (pathname.startsWith("/auth")) {
-    debugLog("middleware", { pathname, branch: "auth-skip-supabase" });
+  // OAuth callback: ikke bland inn getUser/redirect her — koden byttes i route handler.
+  if (pathname.startsWith("/auth/callback")) {
+    debugLog("middleware", { pathname, branch: "auth-callback-skip" });
     return NextResponse.next();
   }
 
@@ -40,6 +40,11 @@ export async function updateSession(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    if (user && (pathname === "/auth/login" || pathname === "/auth/register")) {
+      debugLog("middleware", { pathname, branch: "redirect-dashboard-already-signed-in" });
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
 
     const isProtectedRoute =
       pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");

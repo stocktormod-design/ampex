@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { signInWithPassword } from "@/app/auth/login/actions";
+import { safeNextPath } from "@/lib/safe-next-path";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
@@ -17,45 +16,9 @@ type LoginPageProps = {
   };
 };
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  let hasSession = false;
-  let configError: string | null = null;
-
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      hasSession = true;
-    }
-  } catch (error) {
-    configError =
-      error instanceof Error ? error.message : "Klarte ikke koble til innlogging.";
-  }
-
-  // Viktig: redirect() ma IKKE sta inne i try/catch — Next kaster NEXT_REDIRECT.
-  if (hasSession) {
-    redirect("/dashboard");
-  }
-
-  if (configError) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8">
-        <Card className="w-full border-destructive/50">
-          <CardHeader>
-            <CardTitle>Konfigurasjonsfeil</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>{configError}</p>
-            <p>
-              Sjekk at <code className="rounded bg-muted px-1">NEXT_PUBLIC_SUPABASE_URL</code> og{" "}
-              <code className="rounded bg-muted px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> er satt
-              i Vercel → Settings → Environment Variables (og redeploy).
-            </p>
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
+/** Ingen Supabase/cookies her — unngar RSC-krasj pa Vercel; sesjon handteres i middleware. */
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const nextPath = safeNextPath(searchParams?.next);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
@@ -65,7 +28,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </CardHeader>
         <CardContent>
           <form action={signInWithPassword} className="space-y-4">
-            <input type="hidden" name="next" defaultValue={searchParams?.next ?? "/dashboard"} />
+            <input type="hidden" name="next" value={nextPath} />
             <div className="space-y-2">
               <NativeLabel htmlFor="email">E-post</NativeLabel>
               <NativeInput id="email" name="email" type="email" required autoComplete="email" />
