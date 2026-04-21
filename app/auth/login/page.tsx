@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signInWithPassword } from "@/app/auth/login/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
@@ -31,23 +32,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       error instanceof Error ? error.message : "Klarte ikke koble til innlogging.";
   }
 
-  async function login(formData: FormData) {
-    "use server";
-
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-    const next = String(formData.get("next") ?? "/dashboard");
-
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      redirect(`/auth/login?error=${encodeURIComponent(error.message)}`);
-    }
-
-    redirect(next);
-  }
-
   if (configError) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8">
@@ -75,7 +59,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <CardTitle>Logg inn i Ampex</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={login} className="space-y-4">
+          <form action={signInWithPassword} className="space-y-4">
             <input type="hidden" name="next" defaultValue={searchParams?.next ?? "/dashboard"} />
             <div className="space-y-2">
               <NativeLabel htmlFor="email">E-post</NativeLabel>

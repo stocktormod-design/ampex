@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signUp } from "@/app/auth/register/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
@@ -29,38 +30,6 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
     // Vis skjema — feil handteres ved submit
   }
 
-  async function register(formData: FormData) {
-    "use server";
-
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-    const fullName = String(formData.get("full_name") ?? "");
-    const phone = String(formData.get("phone") ?? "");
-
-    const supabase = await createClient();
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
-    const callbackUrl = `${baseUrl}/auth/callback`;
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: callbackUrl,
-        data: {
-          full_name: fullName,
-          phone,
-        },
-      },
-    });
-
-    if (error) {
-      redirect(`/auth/register?error=${encodeURIComponent(error.message)}`);
-    }
-
-    redirect("/auth/register?success=1");
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
       <Card className="w-full">
@@ -68,7 +37,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           <CardTitle>Registrer ny konto</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={register} className="space-y-4">
+          <form action={signUp} className="space-y-4">
             <div className="space-y-2">
               <NativeLabel htmlFor="full_name">Fullt navn</NativeLabel>
               <NativeInput id="full_name" name="full_name" required autoComplete="name" />

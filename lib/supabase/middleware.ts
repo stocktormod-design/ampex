@@ -4,21 +4,20 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Ikke kjor Supabase cookie-refresh pa /auth/* — unngar Edge-feil med
-  // request.cookies.set og 500 pa innloggingssider.
+  // Ikke kjor Supabase cookie-refresh pa /auth/* — unngar Edge-problemer pa innlogging.
   if (pathname.startsWith("/auth")) {
-    return NextResponse.next({ request });
+    return NextResponse.next();
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.next({ request });
+    return NextResponse.next();
   }
 
   try {
-    let response = NextResponse.next({ request });
+    let response = NextResponse.next();
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
@@ -27,7 +26,7 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          response = NextResponse.next();
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
@@ -51,6 +50,6 @@ export async function updateSession(request: NextRequest) {
 
     return response;
   } catch {
-    return NextResponse.next({ request });
+    return NextResponse.next();
   }
 }
