@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { lookupBarcode, registerWarehouseItem } from "@/app/dashboard/lager/actions";
 
@@ -20,6 +20,36 @@ export function BarcodeRegister({ warehouseId }: Props) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [readerId] = useState(() => `ampex-qr-${Math.random().toString(36).slice(2, 11)}`);
+
+  const applyLookupResult = useCallback((res: Awaited<ReturnType<typeof lookupBarcode>>) => {
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    if (res.found) {
+      setFoundName(res.name);
+      setStep("found");
+      setMessage(null);
+    } else {
+      setFoundName(null);
+      setStep("new");
+      setMessage("Strekkoden er ny. Fyll inn varenavn og lagre.");
+    }
+  }, []);
+
+  const runLookupForCode = useCallback(
+    (code: string) => {
+      const trimmed = code.trim();
+      if (!trimmed) return;
+      setError(null);
+      setMessage(null);
+      startTransition(async () => {
+        const res = await lookupBarcode(warehouseId, trimmed);
+        applyLookupResult(res);
+      });
+    },
+    [warehouseId, applyLookupResult],
+  );
 
   useEffect(() => {
     if (!cameraOpen) {
@@ -45,14 +75,14 @@ export function BarcodeRegister({ warehouseId }: Props) {
             const text = decodedText.trim();
             setBarcode(text);
             setCameraOpen(false);
-            setStep("idle");
-            setFoundName(null);
-            setMessage(text ? "Strekkode fra QR er satt inn. Trykk «Sjekk strekkode»." : null);
             void scanner
               .stop()
               .then(() => scanner.clear())
               .catch(() => {});
             scannerRef.current = null;
+            if (text) {
+              runLookupForCode(text);
+            }
           },
           () => {},
         );
@@ -77,27 +107,10 @@ export function BarcodeRegister({ warehouseId }: Props) {
           .catch(() => {});
       }
     };
-  }, [cameraOpen, readerId]);
+  }, [cameraOpen, readerId, runLookupForCode]);
 
   function onLookup() {
-    setError(null);
-    setMessage(null);
-    startTransition(async () => {
-      const res = await lookupBarcode(warehouseId, barcode);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      if (res.found) {
-        setFoundName(res.name);
-        setStep("found");
-        setMessage(null);
-      } else {
-        setFoundName(null);
-        setStep("new");
-        setMessage("Strekkoden er ny. Fyll inn varenavn og lagre.");
-      }
-    });
+    runLookupForCode(barcode);
   }
 
   function onRegister() {
@@ -127,8 +140,8 @@ export function BarcodeRegister({ warehouseId }: Props) {
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-base font-semibold">Registrer vare med strekkode</h2>
       <p className="text-xs text-muted-foreground">
-        Lim inn strekkode, skann QR med kamera (inneholder ofte strekkode som tekst), eller skriv
-        manuelt. Trykk «Sjekk strekkode»; ved ny kode, fyll inn varenavn og lagre.
+        Lim inn strekkode, skann QR med kamera (sjekker automatisk etter skann), eller skriv manuelt
+        og trykk «Sjekk strekkode». Ved ny kode: fyll inn varenavn og lagre.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1 space-y-1.5">
