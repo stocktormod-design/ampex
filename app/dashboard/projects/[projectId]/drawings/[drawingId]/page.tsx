@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
 import type { PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
@@ -88,25 +87,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   }));
 
   return (
-    <main className="-m-4 space-y-3 sm:-m-8">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
-          <Link
-            href={`/dashboard/projects/${projectId}`}
-            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-          >
-            ← Tilbake til tegningsliste
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Paint view · {project.name}
-            {drawing.revision?.trim() ? ` · Rev ${drawing.revision}` : ""}
-          </h1>
-        </div>
-        <span className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-          {drawing.is_published ? "Publisert" : "Utkast"}
-        </span>
-      </div>
-
+    <main className="h-[calc(100dvh-3.8rem)] p-2 sm:p-3">
       <PaintWorkbench
         fileUrl={signed.signedUrl}
         filePath={drawing.file_path}

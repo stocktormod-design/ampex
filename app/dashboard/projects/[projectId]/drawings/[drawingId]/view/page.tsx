@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,13 +17,11 @@ type PageProps = {
 
 type ProjectRow = {
   id: string;
-  name: string;
 };
 
 type DrawingRow = {
   id: string;
   name: string;
-  revision: string | null;
   file_path: string;
 };
 
@@ -47,7 +44,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
 
   const { data: projectData } = await supabase
     .from("projects")
-    .select("id, name")
+    .select("id")
     .eq("id", projectId)
     .maybeSingle();
   const project = projectData as ProjectRow | null;
@@ -57,7 +54,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
 
   const { data: drawingData } = await supabase
     .from("drawings")
-    .select("id, name, revision, file_path")
+    .select("id, name, file_path")
     .eq("id", drawingId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -78,42 +75,21 @@ export default async function DrawingViewerPage({ params }: PageProps) {
     : null;
 
   return (
-    <main className="-m-4 space-y-3 sm:-m-8">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
-          <Link
-            href={`/dashboard/projects/${projectId}`}
-            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-          >
-            ← Tilbake til tegningsliste
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Tegningsvisning · {project.name}
-            {drawing.revision?.trim() ? ` · Rev ${drawing.revision}` : ""}
-          </h1>
-        </div>
-        <Link
-          href={`/dashboard/projects/${projectId}/drawings/${drawingId}`}
-          className="rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
-        >
-          Paint view
-        </Link>
-      </div>
-
-      <section className="h-[calc(100dvh-9.5rem)] min-h-[420px] overflow-hidden rounded-lg border bg-background sm:min-h-[520px]">
+    <main className="h-[calc(100dvh-3.8rem)] p-2 sm:p-3">
+      <section className="h-full min-h-[420px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 sm:min-h-[520px]">
         {isPdf ? (
           <div className="h-full w-full">
             <iframe src={webPdfViewerUrl ?? signed.signedUrl} title={`Tegning ${drawing.name}`} className="h-full w-full" />
-            <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">
+            <div className="border-t border-zinc-700 bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
               Hvis PDF ikke vises riktig:{" "}
-              <a href={signed.signedUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">
+              <a href={signed.signedUrl} target="_blank" rel="noreferrer" className="underline hover:text-zinc-100">
                 åpne direkte
               </a>
               .
             </div>
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center overflow-auto bg-muted/30 p-3">
+          <div className="flex h-full items-center justify-center overflow-auto bg-zinc-800 p-3">
             <img src={signed.signedUrl} alt={drawing.name} className="max-h-full max-w-full rounded border bg-white object-contain" />
           </div>
         )}

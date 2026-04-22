@@ -306,8 +306,8 @@ export function PaintWorkbench({
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[1fr_22rem]">
-      <div className="relative h-[calc(100dvh-11rem)] min-h-[420px] overflow-hidden rounded-lg border bg-background sm:h-[calc(100dvh-9.5rem)] lg:min-h-[620px]">
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem]">
+      <div className="relative h-[calc(100dvh-11rem)] min-h-[420px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 sm:h-[calc(100dvh-9.5rem)] lg:min-h-[620px]">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}
@@ -320,7 +320,7 @@ export function PaintWorkbench({
           selectedDraftDetector={selectedDraftDetector}
           onSelectDraftDetector={setSelectedDraftDetector}
         />
-        <div className="pointer-events-none absolute right-2 top-12 z-20 hidden sm:block">
+        <div className="pointer-events-none absolute right-2 top-16 z-20 hidden sm:block">
           <div className="pointer-events-auto">
             <PaintToolbar
               activeTool={activeTool}
@@ -350,7 +350,7 @@ export function PaintWorkbench({
         />
       </div>
 
-      <aside className="space-y-3 lg:max-h-[calc(100dvh-9.5rem)] lg:overflow-auto">
+      <aside className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9.5rem)] lg:overflow-auto">
         <div className="grid grid-cols-2 gap-2 rounded-lg border bg-card p-1 sm:hidden">
           <button
             type="button"
@@ -372,7 +372,7 @@ export function PaintWorkbench({
           </button>
         </div>
 
-        <section className={`rounded-lg border bg-card p-3 ${mobilePanel === "drafts" ? "hidden sm:block" : ""}`}>
+        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "drafts" ? "hidden sm:block" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Detektor-status</h2>
             <span className="text-xs text-muted-foreground">
@@ -491,7 +491,7 @@ export function PaintWorkbench({
           )}
         </section>
 
-        <section className={`rounded-lg border bg-card p-3 ${mobilePanel === "status" ? "hidden sm:block" : ""}`}>
+        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "status" ? "hidden sm:block" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Utkast på bruker</h2>
             <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>

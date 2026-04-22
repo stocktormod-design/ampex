@@ -290,17 +290,17 @@ export function PaintCanvas({
   }
 
   return (
-    <section className="flex min-h-[72vh] min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2 sm:px-4">
+    <section className="flex min-h-[72vh] min-w-0 flex-1 flex-col bg-zinc-900 text-zinc-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-2 sm:px-4">
         <div className="min-w-0 max-w-full">
           <p className="truncate text-sm font-medium">{drawingName}</p>
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">{filePath}</p>
+          <p className="hidden truncate text-xs text-zinc-400 sm:block">{filePath}</p>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
-            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             −
           </button>
@@ -308,31 +308,31 @@ export function PaintCanvas({
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
-            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             +
           </button>
           <button
             type="button"
             onClick={() => setZoom(1)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             Reset
           </button>
           <button
             type="button"
             onClick={() => setZoom(fitZoom)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             Fit
           </button>
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-2 sm:p-4">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-2 sm:p-4">
         <div className="mx-auto w-fit">
           <div
-            className="relative overflow-hidden rounded-md border bg-white shadow-sm"
+            className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
               width: `${Math.round(stageW * zoom)}px`,
               height: `${Math.round(stageH * zoom)}px`,
@@ -340,7 +340,7 @@ export function PaintCanvas({
           >
             {isPdf ? (
               <iframe
-                src={`${fileUrl}#view=FitH`}
+                src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                 title={`Tegning ${drawingName}`}
                 className="h-full w-full"
               />
@@ -356,7 +356,7 @@ export function PaintCanvas({
               ref={canvasRef}
               width={stageW}
               height={stageH}
-              className="absolute inset-0 z-10 h-full w-full cursor-crosshair"
+              className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
