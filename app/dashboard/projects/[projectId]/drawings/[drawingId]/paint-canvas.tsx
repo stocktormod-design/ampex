@@ -25,11 +25,18 @@ function fileExt(path: string): string {
 const DEFAULT_STAGE = { w: 1400, h: 980 };
 const MAX_STAGE_W = 2200;
 const MAX_STAGE_H = 1600;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 6;
+const ZOOM_STEP = 0.1;
 
 type DraftShape =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number }
   | { type: "rect"; x: number; y: number; w: number; h: number }
   | null;
+
+function clampZoom(value: number) {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(3))));
+}
 
 function normalizeRect(x1: number, y1: number, x2: number, y2: number) {
   const x = Math.min(x1, x2);
@@ -101,7 +108,8 @@ export function PaintCanvas({
   selectedDraftDetector,
   onSelectDraftDetector,
 }: Props) {
-  const [zoom, setZoom] = useState(1);
+  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
+  const [manualZoom, setManualZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [draft, setDraft] = useState<DraftShape>(null);
@@ -113,6 +121,7 @@ export function PaintCanvas({
   const activeLayer = useMemo(() => draftLayers.find((l) => l.id === activeLayerId) ?? null, [draftLayers, activeLayerId]);
   const stageW = stageSize.w;
   const stageH = stageSize.h;
+  const zoom = zoomMode === "fit" ? fitZoom : manualZoom;
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -135,24 +144,20 @@ export function PaintCanvas({
     if (!view) return;
 
     const updateFit = () => {
-      const vw = Math.max(320, view.clientWidth - 40);
-      const vh = Math.max(220, view.clientHeight - 40);
+      const horizontalPadding = view.clientWidth < 640 ? 16 : 32;
+      const verticalPadding = view.clientWidth < 640 ? 16 : 32;
+      const vw = Math.max(220, view.clientWidth - horizontalPadding);
+      const vh = Math.max(180, view.clientHeight - verticalPadding);
       const fit = Math.min(vw / stageW, vh / stageH);
-      const clamped = Math.max(0.2, Math.min(4, +fit.toFixed(2)));
+      const clamped = clampZoom(fit);
       setFitZoom(clamped);
-      setZoom((prev) => {
-        if (Math.abs(prev - 1) < 0.001 || Math.abs(prev - fitZoom) < 0.001) {
-          return clamped;
-        }
-        return prev;
-      });
     };
 
     updateFit();
     const ro = new ResizeObserver(updateFit);
     ro.observe(view);
     return () => ro.disconnect();
-  }, [stageW, stageH, fitZoom]);
+  }, [stageW, stageH]);
 
   function pointerToStage(e: PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -289,8 +294,27 @@ export function PaintCanvas({
     setDraft(null);
   }
 
+  function increaseZoom() {
+    setZoomMode("manual");
+    setManualZoom((prev) => clampZoom(Math.max(prev, zoom) + ZOOM_STEP));
+  }
+
+  function decreaseZoom() {
+    setZoomMode("manual");
+    setManualZoom((prev) => clampZoom(Math.max(prev, zoom) - ZOOM_STEP));
+  }
+
+  function resetZoom() {
+    setZoomMode("manual");
+    setManualZoom(1);
+  }
+
+  function fitToViewport() {
+    setZoomMode("fit");
+  }
+
   return (
-    <section className="flex min-h-[72vh] min-w-0 flex-1 flex-col bg-zinc-900 text-zinc-100">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-900 text-zinc-100">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-2 sm:px-4">
         <div className="min-w-0 max-w-full">
           <p className="truncate text-sm font-medium">{drawingName}</p>
@@ -299,30 +323,34 @@ export function PaintCanvas({
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
+            onClick={decreaseZoom}
             className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             −
           </button>
-          <span className="w-12 text-center text-[11px] tabular-nums sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
+          <span className="w-14 text-center text-[11px] tabular-nums sm:text-xs">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
+            onClick={increaseZoom}
             className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             +
           </button>
           <button
             type="button"
-            onClick={() => setZoom(1)}
+            onClick={resetZoom}
             className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
           >
             Reset
           </button>
           <button
             type="button"
-            onClick={() => setZoom(fitZoom)}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
+            onClick={fitToViewport}
+            className={`rounded-md border px-2 py-1 text-[11px] sm:text-xs ${
+              zoomMode === "fit"
+                ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
+                : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+            }`}
           >
             Fit
           </button>
@@ -330,7 +358,7 @@ export function PaintCanvas({
       </div>
 
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-2 sm:p-4">
-        <div className="mx-auto w-fit">
+        <div className="mx-auto flex min-h-full min-w-full items-center justify-center">
           <div
             className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
@@ -348,7 +376,7 @@ export function PaintCanvas({
               <img
                 src={fileUrl}
                 alt={drawingName}
-                className="h-full w-full object-fill"
+                className="h-full w-full object-contain"
                 style={{ imageRendering: "auto", pointerEvents: "none" }}
               />
             )}
