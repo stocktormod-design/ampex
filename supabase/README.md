@@ -30,6 +30,18 @@ npm run db:migration:list
 npm run db:push
 ```
 
+## Automatisk i GitHub Actions
+
+Workflow: `.github/workflows/supabase-migrations.yml`
+
+Den kjører `supabase db push` automatisk ved push til `main` når filer i `supabase/migrations/` endres.
+
+Sett følgende repository secret i GitHub:
+
+- `SUPABASE_DB_URL` = full Postgres connection string til Supabase-databasen.
+
+Når secret er satt, trengs ikke manuell migrering i vanlig flyt.
+
 ## Feil: `invalid input value for enum app_role: "apprentice"`
 
 Skjer ofte hvis `20260422120000` er **registrert** i migrasjonshistorikk, men **ikke** faktisk kjørt på databasen.
