@@ -112,6 +112,8 @@ export function PaintCanvas({
   const [manualZoom, setManualZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftShape>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -125,18 +127,82 @@ export function PaintCanvas({
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (isPdf) {
-      setStageSize(DEFAULT_STAGE);
-      return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    async function loadPdfPreview() {
+      try {
+        setPdfLoadError(null);
+        setPdfPreviewUrl(null);
+
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error("Kunne ikke hente PDF");
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        const task = pdfjs.getDocument(bytes);
+        const pdf = await task.promise;
+        const page = await pdf.getPage(1);
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const renderViewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(renderViewport.width);
+        canvas.height = Math.ceil(renderViewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Kunne ikke initialisere PDF-canvas");
+        }
+
+        await page.render({ canvas, canvasContext: ctx, viewport: renderViewport }).promise;
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+        if (!blob) {
+          throw new Error("Kunne ikke konvertere PDF");
+        }
+
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        setPdfPreviewUrl(objectUrl);
+        const w = Math.max(400, Math.min(MAX_STAGE_W, Math.round(baseViewport.width)));
+        const h = Math.max(300, Math.min(MAX_STAGE_H, Math.round(baseViewport.height)));
+        setStageSize({ w, h });
+      } catch {
+        if (cancelled) return;
+        setPdfLoadError("Kunne ikke vise PDF i nettleseren.");
+        setStageSize(DEFAULT_STAGE);
+      }
     }
-    const image = new Image();
-    image.onload = () => {
-      const w = Math.max(700, Math.min(MAX_STAGE_W, image.naturalWidth || DEFAULT_STAGE.w));
-      const h = Math.max(500, Math.min(MAX_STAGE_H, image.naturalHeight || DEFAULT_STAGE.h));
-      setStageSize({ w, h });
+
+    if (isPdf) {
+      void loadPdfPreview();
+    } else {
+      setPdfPreviewUrl(null);
+      setPdfLoadError(null);
+      const image = new Image();
+      image.onload = () => {
+        if (cancelled) return;
+        const w = Math.max(700, Math.min(MAX_STAGE_W, image.naturalWidth || DEFAULT_STAGE.w));
+        const h = Math.max(500, Math.min(MAX_STAGE_H, image.naturalHeight || DEFAULT_STAGE.h));
+        setStageSize({ w, h });
+      };
+      image.onerror = () => {
+        if (cancelled) return;
+        setStageSize(DEFAULT_STAGE);
+      };
+      image.src = fileUrl;
+    }
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
     };
-    image.onerror = () => setStageSize(DEFAULT_STAGE);
-    image.src = fileUrl;
   }, [fileUrl, isPdf]);
 
   useEffect(() => {
@@ -367,11 +433,18 @@ export function PaintCanvas({
             }}
           >
             {isPdf ? (
-              <iframe
-                src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                title={`Tegning ${drawingName}`}
-                className="h-full w-full"
-              />
+              pdfPreviewUrl ? (
+                <img
+                  src={pdfPreviewUrl}
+                  alt={`${drawingName} PDF`}
+                  className="h-full w-full object-contain"
+                  style={{ imageRendering: "auto", pointerEvents: "none" }}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-zinc-100 p-4 text-center text-sm text-zinc-600">
+                  {pdfLoadError ?? "Laster PDF..."}
+                </div>
+              )
             ) : (
               <img
                 src={fileUrl}
