@@ -12,6 +12,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const PROJECT_STATUS = new Set(["planning", "active", "completed"]);
 const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
+const OVERLAY_TOOL_TYPES = new Set(["detector", "line", "rect", "text"]);
+const OVERLAY_VISIBILITY = new Set(["all", "admins"]);
 
 type CompanyProfile = {
   company_id: string | null;
@@ -242,9 +244,9 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
     file_path: objectPath,
     revision: revisionInput || null,
     uploaded_by: userId,
-    is_published: false,
-    published_at: null,
-    published_by: null,
+    is_published: true,
+    published_at: new Date().toISOString(),
+    published_by: userId,
   });
 
   if (insertError) {
@@ -254,6 +256,77 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
 
   revalidatePath(projectPath(projectId));
   redirect(`${projectPath(projectId)}?success=upload-ok`);
+}
+
+type PublishOverlayInput = {
+  drawingId: string;
+  toolType: string;
+  layerName: string;
+  layerColor: string;
+  visibilityScope: string;
+  payload: unknown;
+};
+
+export async function publishOverlayItem(input: PublishOverlayInput) {
+  const { userId, companyId, adminClient } = await requireAdminContext();
+  const drawingId = String(input.drawingId ?? "").trim();
+  const toolType = String(input.toolType ?? "").trim();
+  const layerName = String(input.layerName ?? "").trim() || "Lag";
+  const layerColor = String(input.layerColor ?? "").trim() || "#ef4444";
+  const visibilityScope = String(input.visibilityScope ?? "all").trim();
+  const payload = input.payload;
+
+  if (!drawingId) {
+    return { ok: false as const, error: "Mangler tegning" };
+  }
+  if (!OVERLAY_TOOL_TYPES.has(toolType)) {
+    return { ok: false as const, error: "Ugyldig verktøytype" };
+  }
+  if (!OVERLAY_VISIBILITY.has(visibilityScope)) {
+    return { ok: false as const, error: "Ugyldig synlighetsvalg" };
+  }
+  if (!payload || typeof payload !== "object") {
+    return { ok: false as const, error: "Ugyldig overlay-data" };
+  }
+
+  const { data: drawingData, error: drawingErr } = await adminClient
+    .from("drawings")
+    .select("id, project_id, projects!inner(company_id)")
+    .eq("id", drawingId)
+    .maybeSingle();
+  if (drawingErr || !drawingData) {
+    return { ok: false as const, error: drawingErr?.message ?? "Tegning ikke funnet" };
+  }
+
+  const drawing = drawingData as { id: string; project_id: string; projects: { company_id: string }[] | null };
+  const ownerCompanyId = drawing.projects?.[0]?.company_id ?? null;
+  if (ownerCompanyId !== companyId) {
+    return { ok: false as const, error: "Tegningen tilhører ikke firmaet" };
+  }
+
+  const { data, error } = await adminClient
+    .from("drawing_overlays")
+    .insert({
+      drawing_id: drawingId,
+      created_by: userId,
+      tool_type: toolType,
+      layer_name: layerName,
+      layer_color: layerColor,
+      payload,
+      is_published: true,
+      visibility_scope: visibilityScope,
+      published_at: new Date().toISOString(),
+      published_by: userId,
+    })
+    .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visibility_scope")
+    .single();
+
+  if (error || !data) {
+    return { ok: false as const, error: error?.message ?? "Kunne ikke publisere overlay" };
+  }
+
+  revalidatePath(`/dashboard/projects/${drawing.project_id}/drawings/${drawingId}`);
+  return { ok: true as const, data };
 }
 
 async function getOwnedDrawing(adminClient: ReturnType<typeof createAdminClient>, drawingId: string, companyId: string) {

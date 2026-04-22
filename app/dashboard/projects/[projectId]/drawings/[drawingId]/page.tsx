@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
+import type { PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,33 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
     redirect(`/dashboard/projects/${projectId}?error=Kunne+ikke+laste+tegning`);
   }
 
+  const { data: overlaysData } = await supabase
+    .from("drawing_overlays")
+    .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visibility_scope")
+    .eq("drawing_id", drawing.id)
+    .eq("is_published", true)
+    .order("created_at", { ascending: true });
+
+  const initialPublished = ((overlaysData ?? []) as {
+    id: string;
+    drawing_id: string;
+    created_by: string;
+    tool_type: "detector" | "line" | "rect" | "text";
+    layer_name: string;
+    layer_color: string;
+    payload: unknown;
+    visibility_scope: "all" | "admins";
+  }[]).map((row) => ({
+    id: row.id,
+    drawingId: row.drawing_id,
+    createdBy: row.created_by,
+    toolType: row.tool_type,
+    layerName: row.layer_name,
+    layerColor: row.layer_color,
+    payload: row.payload as PublishedOverlay["payload"],
+    visibilityScope: row.visibility_scope,
+  }));
+
   return (
     <main className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -79,7 +107,14 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
         </span>
       </div>
 
-      <PaintWorkbench fileUrl={signed.signedUrl} filePath={drawing.file_path} drawingName={drawing.name} />
+      <PaintWorkbench
+        fileUrl={signed.signedUrl}
+        filePath={drawing.file_path}
+        drawingName={drawing.name}
+        drawingId={drawing.id}
+        currentUserId={user.id}
+        initialPublished={initialPublished}
+      />
     </main>
   );
 }

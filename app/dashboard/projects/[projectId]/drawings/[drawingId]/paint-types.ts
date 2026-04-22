@@ -13,3 +13,16 @@ export type OverlayLayer = {
   color: string;
   items: OverlayItem[];
 };
+
+export type OverlayVisibility = "all" | "admins";
+
+export type PublishedOverlay = {
+  id: string;
+  drawingId: string;
+  createdBy: string;
+  toolType: ToolId;
+  layerName: string;
+  layerColor: string;
+  payload: OverlayItem;
+  visibilityScope: OverlayVisibility;
+};

@@ -4,8 +4,6 @@ import { FileText } from "lucide-react";
 import {
   convertProjectImagesToPdf,
   deleteDraftDrawing,
-  publishDrawing,
-  unpublishDrawing,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -158,7 +156,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <CardHeader>
             <CardTitle className="text-lg">Last opp tegning</CardTitle>
             <CardDescription>
-              {isAdmin ? "Ny tegning lagres som utkast til den publiseres." : "Kun admin kan laste opp tegninger."}
+              {isAdmin ? "Ny tegning publiseres automatisk ved opplasting." : "Kun admin kan laste opp tegninger."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -184,7 +182,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                   />
                   <p className="text-xs text-muted-foreground">Tillatt: PDF, JPEG, PNG. Maks 25 MB.</p>
                 </div>
-                <SubmitButton className="w-full">Last opp utkast</SubmitButton>
+                <SubmitButton className="w-full">Last opp (publiseres)</SubmitButton>
               </form>
             ) : (
               <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -274,38 +272,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                         </Link>
 
                         {isAdmin ? (
-                          <>
-                            <form action={publishDrawing}>
-                              <input type="hidden" name="drawing_id" value={row.id} />
-                              <button
-                                type="submit"
-                                disabled={row.is_published}
-                                className="rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                              >
-                                Publiser
-                              </button>
-                            </form>
-                            <form action={unpublishDrawing}>
-                              <input type="hidden" name="drawing_id" value={row.id} />
-                              <button
-                                type="submit"
-                                disabled={!row.is_published}
-                                className="rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                              >
-                                Avpubliser
-                              </button>
-                            </form>
-                            <form action={deleteDraftDrawing}>
-                              <input type="hidden" name="drawing_id" value={row.id} />
-                              <button
-                                type="submit"
-                                disabled={row.is_published}
-                                className="rounded-md border border-destructive/40 bg-background px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                              >
-                                Slett utkast
-                              </button>
-                            </form>
-                          </>
+                          <form action={deleteDraftDrawing}>
+                            <input type="hidden" name="drawing_id" value={row.id} />
+                            <button
+                              type="submit"
+                              disabled={row.is_published}
+                              className="rounded-md border border-destructive/40 bg-background px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                            >
+                              Slett utkast
+                            </button>
+                          </form>
                         ) : null}
                       </div>
                     </div>
