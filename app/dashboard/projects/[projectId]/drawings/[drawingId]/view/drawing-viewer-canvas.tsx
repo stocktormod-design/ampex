@@ -61,13 +61,17 @@ function detectContentBounds(canvas: HTMLCanvasElement): Bounds | null {
 }
 
 export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
-  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
-  const [manualZoom, setManualZoom] = useState(1);
+  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("manual");
+  const [manualZoom, setManualZoom] = useState(1.5);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [touchStart, setTouchStart] = useState<{ dist: number; zoom: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const isPdf = fileExt(filePath) === "pdf";
   const zoom = zoomMode === "fit" ? fitZoom : manualZoom;
 
@@ -213,6 +217,59 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
     setZoomMode("fit");
   }
 
+  function onTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      setTouchStart({ dist, zoom: manualZoom });
+      setZoomMode("manual");
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      setDragStart({ x: t.clientX, y: t.clientY });
+    }
+  }
+
+  function onTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length === 2 && touchStart) {
+      e.preventDefault();
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / touchStart.dist;
+      const newZoom = clampZoom(touchStart.zoom * scale);
+      setManualZoom(newZoom);
+    } else if (e.touches.length === 1 && dragStart) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const dx = t.clientX - dragStart.x;
+      const dy = t.clientY - dragStart.y;
+      setPanOffset((p) => ({ x: p.x + dx, y: p.y + dy }));
+      setDragStart({ x: t.clientX, y: t.clientY });
+    }
+  }
+
+  function onTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length < 2) {
+      setTouchStart(null);
+    }
+    if (e.touches.length === 0) {
+      setDragStart(null);
+    }
+  }
+
+  function onWheel(e: React.WheelEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.001;
+    setZoomMode("manual");
+    setManualZoom((prev) => clampZoom(prev + delta));
+  }
+
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-zinc-900 text-zinc-100">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-2 sm:px-4">
@@ -257,13 +314,22 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-0 sm:p-4">
+      <div 
+        ref={viewportRef} 
+        className="relative min-h-0 flex-1 overflow-hidden bg-zinc-800 p-0 sm:p-4"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onWheel={onWheel}
+      >
         <div className="mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center">
           <div
+            ref={containerRef}
             className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
               width: `${Math.round(stageSize.w * zoom)}px`,
               height: `${Math.round(stageSize.h * zoom)}px`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
             }}
           >
             {isPdf ? (

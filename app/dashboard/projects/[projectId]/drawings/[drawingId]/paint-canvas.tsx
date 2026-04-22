@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent } from "react";
 import type { OverlayItem, OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
@@ -144,8 +144,8 @@ export function PaintCanvas({
   selectedDraftDetector,
   onSelectDraftDetector,
 }: Props) {
-  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
-  const [manualZoom, setManualZoom] = useState(1);
+  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("manual");
+  const [manualZoom, setManualZoom] = useState(1.5);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [docOffset, setDocOffset] = useState({ x: 0, y: 0 });
@@ -153,6 +153,9 @@ export function PaintCanvas({
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftShape>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [touchStart, setTouchStart] = useState<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ext = fileExt(filePath);
   const isPdf = ext === "pdf";
@@ -380,6 +383,20 @@ export function PaintCanvas({
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!activeLayer) return;
+    
+    if (activeTool === "select") {
+      const pt = pointerToStage(e);
+      const hitDetector = findDraftDetectorAt(pt.x, pt.y);
+      if (hitDetector) {
+        onSelectDraftDetector(hitDetector);
+        return;
+      }
+      onSelectDraftDetector(null);
+      setIsPanning(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
     const pt = pointerToStage(e);
     const docPt = toDocPoint(pt);
     const hitDetector = findDraftDetectorAt(pt.x, pt.y);
@@ -425,6 +442,14 @@ export function PaintCanvas({
   }
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
+    if (isPanning && dragStart) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setDragStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
     if (!dragStart) return;
     const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
@@ -438,6 +463,12 @@ export function PaintCanvas({
   }
 
   function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
+    if (isPanning) {
+      setIsPanning(false);
+      setDragStart(null);
+      return;
+    }
+
     if (!dragStart) return;
     const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
@@ -448,6 +479,56 @@ export function PaintCanvas({
     }
     setDragStart(null);
     setDraft(null);
+  }
+
+  function onTouchStart(e: TouchEvent<HTMLCanvasElement>) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const cx = (t0.clientX + t1.clientX) / 2;
+      const cy = (t0.clientY + t1.clientY) / 2;
+      setTouchStart({ dist, zoom: manualZoom, cx, cy });
+      setZoomMode("manual");
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      setDragStart({ x: t.clientX, y: t.clientY });
+      setIsPanning(activeTool === "select");
+    }
+  }
+
+  function onTouchMove(e: TouchEvent<HTMLCanvasElement>) {
+    if (e.touches.length === 2 && touchStart) {
+      e.preventDefault();
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / touchStart.dist;
+      const newZoom = clampZoom(touchStart.zoom * scale);
+      setManualZoom(newZoom);
+    } else if (e.touches.length === 1 && dragStart && (isPanning || activeTool === "select")) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const dx = t.clientX - dragStart.x;
+      const dy = t.clientY - dragStart.y;
+      setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setDragStart({ x: t.clientX, y: t.clientY });
+    }
+  }
+
+  function onTouchEnd(e: TouchEvent<HTMLCanvasElement>) {
+    if (e.touches.length < 2) {
+      setTouchStart(null);
+    }
+    if (e.touches.length === 0) {
+      setDragStart(null);
+      setIsPanning(false);
+    }
   }
 
   function increaseZoom() {
@@ -513,13 +594,14 @@ export function PaintCanvas({
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-0 sm:p-4">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-zinc-800 p-0 sm:p-4">
         <div className="mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center">
           <div
             className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
               width: `${Math.round(stageW * zoom)}px`,
               height: `${Math.round(stageH * zoom)}px`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
             }}
           >
             {isPdf ? (
@@ -562,6 +644,9 @@ export function PaintCanvas({
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerLeave={onPointerUp}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
             />
           </div>
         </div>
