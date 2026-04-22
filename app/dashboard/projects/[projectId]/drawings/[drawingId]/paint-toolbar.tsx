@@ -42,51 +42,51 @@ export function PaintToolbar({
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
 
   return (
-    <aside className="w-full max-w-xs shrink-0 border-l bg-card">
-      <div className="space-y-4 p-4">
+    <aside className="w-full max-w-[18rem] shrink-0 border-l bg-card">
+      <div className="space-y-3 p-3">
         <div>
-          <h2 className="text-sm font-semibold">Verktøy</h2>
-          <p className="text-xs text-muted-foreground">UI-first. Tegning/lagring kobles i neste fase.</p>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Verktøy</h2>
+          <p className="text-[11px] text-muted-foreground">Overlay-lag over tegningen.</p>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid gap-1.5">
           {TOOLS.map((tool) => (
             <button
               key={tool.id}
               type="button"
               onClick={() => onSelectTool(tool.id)}
-              className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+              className={`rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors ${
                 activeTool === tool.id
                   ? "border-primary bg-primary/10 text-foreground"
                   : "border-border bg-background hover:bg-muted"
               }`}
             >
               <span className="font-medium">{tool.label}</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{tool.hint}</span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">{tool.hint}</span>
             </button>
           ))}
         </div>
 
-        <div className="rounded-md border border-border bg-muted/30 p-3">
+        <div className="rounded-md border border-border bg-muted/30 p-2.5">
           <p className="text-xs font-medium">Aktivt verktøy</p>
-          <p className="mt-1 text-sm">{current.label}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{current.hint}</p>
+          <p className="mt-0.5 text-xs">{current.label}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{current.hint}</p>
         </div>
 
-        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+        <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2.5">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium">Lag</p>
             <button
               type="button"
               onClick={onAddLayer}
-              className="rounded border border-input bg-background px-2 py-0.5 text-xs hover:bg-muted"
+              className="rounded border border-input bg-background px-1.5 py-0.5 text-[11px] hover:bg-muted"
             >
               + Nytt lag
             </button>
           </div>
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {layers.map((layer) => (
-              <li key={layer.id} className="rounded border border-border bg-background px-2 py-1.5">
+              <li key={layer.id} className="rounded border border-border bg-background px-2 py-1">
                 <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"
@@ -104,7 +104,7 @@ export function PaintToolbar({
                   <button
                     type="button"
                     onClick={() => onToggleLayer(layer.id)}
-                    className="rounded border border-input px-1.5 py-0.5 text-[10px] hover:bg-muted"
+                    className="rounded border border-input px-1 py-0.5 text-[10px] hover:bg-muted"
                   >
                     {layer.visible ? "Skjul" : "Vis"}
                   </button>
@@ -116,7 +116,7 @@ export function PaintToolbar({
           <button
             type="button"
             onClick={onClearActiveLayer}
-            className="w-full rounded border border-destructive/40 bg-background px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+            className="w-full rounded border border-destructive/40 bg-background px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
           >
             Tøm aktivt lag
           </button>

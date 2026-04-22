@@ -19,8 +19,9 @@ function fileExt(path: string): string {
   return idx === -1 ? "" : lower.slice(idx + 1);
 }
 
-const STAGE_W = 1100;
-const STAGE_H = 780;
+const DEFAULT_STAGE = { w: 1400, h: 980 };
+const MAX_STAGE_W = 2200;
+const MAX_STAGE_H = 1600;
 
 type DraftShape =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number }
@@ -73,18 +74,36 @@ function drawItem(ctx: CanvasRenderingContext2D, item: OverlayItem, color: strin
 
 export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers, activeLayerId, onUpdateLayers }: Props) {
   const [zoom, setZoom] = useState(1);
+  const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [draft, setDraft] = useState<DraftShape>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ext = fileExt(filePath);
   const isPdf = ext === "pdf";
   const activeLayer = useMemo(() => layers.find((l) => l.id === activeLayerId) ?? null, [layers, activeLayerId]);
+  const stageW = stageSize.w;
+  const stageH = stageSize.h;
+
+  useEffect(() => {
+    if (isPdf) {
+      setStageSize(DEFAULT_STAGE);
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      const w = Math.max(700, Math.min(MAX_STAGE_W, image.naturalWidth || DEFAULT_STAGE.w));
+      const h = Math.max(500, Math.min(MAX_STAGE_H, image.naturalHeight || DEFAULT_STAGE.h));
+      setStageSize({ w, h });
+    };
+    image.onerror = () => setStageSize(DEFAULT_STAGE);
+    image.src = fileUrl;
+  }, [fileUrl, isPdf]);
 
   function pointerToStage(e: PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) / rect.width) * STAGE_W,
-      y: ((e.clientY - rect.top) / rect.height) * STAGE_H,
+      x: ((e.clientX - rect.left) / rect.width) * stageW,
+      y: ((e.clientY - rect.top) / rect.height) * stageH,
     };
   }
 
@@ -109,7 +128,7 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, STAGE_W, STAGE_H);
+    ctx.clearRect(0, 0, stageW, stageH);
 
     for (const layer of layers) {
       if (!layer.visible) continue;
@@ -121,7 +140,7 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
     if (draft && activeLayer) {
       drawItem(ctx, draft as OverlayItem, activeLayer.color);
     }
-  }, [layers, draft, activeLayer]);
+  }, [layers, draft, activeLayer, stageW, stageH]);
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!activeLayer) return;
@@ -185,7 +204,7 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+            onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
             className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
           >
             −
@@ -193,7 +212,7 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
           <span className="w-14 text-center text-xs tabular-nums">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(2)))}
+            onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
             className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
           >
             +
@@ -209,11 +228,14 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-6">
-        <div
-          className="mx-auto w-fit origin-top transition-transform"
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
-        >
-          <div className="relative h-[780px] w-[1100px] overflow-hidden rounded-md border bg-white shadow-sm">
+        <div className="mx-auto w-fit">
+          <div
+            className="relative overflow-hidden rounded-md border bg-white shadow-sm"
+            style={{
+              width: `${Math.round(stageW * zoom)}px`,
+              height: `${Math.round(stageH * zoom)}px`,
+            }}
+          >
             {isPdf ? (
               <iframe
                 src={`${fileUrl}#view=FitH`}
@@ -229,8 +251,8 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
             )}
             <canvas
               ref={canvasRef}
-              width={STAGE_W}
-              height={STAGE_H}
+              width={stageW}
+              height={stageH}
               className="absolute inset-0 h-full w-full cursor-crosshair"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
