@@ -79,6 +79,7 @@ export function PaintWorkbench({
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"status" | "drafts">("status");
+  const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
@@ -306,8 +307,8 @@ export function PaintWorkbench({
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem]">
-      <div className="relative h-[calc(100dvh-11rem)] min-h-[420px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 sm:h-[calc(100dvh-9.5rem)] lg:min-h-[620px]">
+    <div className="relative h-[calc(100dvh-3.8rem)]">
+      <div className="relative h-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}
@@ -334,24 +335,43 @@ export function PaintWorkbench({
             />
           </div>
         </div>
+        <div className="absolute bottom-2 left-2 right-2 z-20 sm:hidden">
+          <PaintToolbar
+            mobile
+            activeTool={activeTool}
+            onSelectTool={setActiveTool}
+            layers={layers}
+            activeLayerId={activeLayerId}
+            onSetActiveLayer={setActiveLayerId}
+            onAddLayer={addLayer}
+            onToggleLayer={toggleLayer}
+            onClearActiveLayer={clearActiveLayer}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setPanelOpen((v) => !v)}
+          className="absolute right-2 top-2 z-30 rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1 text-xs text-zinc-100 hover:bg-zinc-800"
+        >
+          {panelOpen ? "Skjul panel" : "Vis panel"}
+        </button>
       </div>
 
-      <div className="sm:hidden">
-        <PaintToolbar
-          mobile
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          layers={layers}
-          activeLayerId={activeLayerId}
-          onSetActiveLayer={setActiveLayerId}
-          onAddLayer={addLayer}
-          onToggleLayer={toggleLayer}
-          onClearActiveLayer={clearActiveLayer}
+      {panelOpen ? (
+        <button
+          type="button"
+          aria-label="Lukk sidepanel"
+          onClick={() => setPanelOpen(false)}
+          className="absolute inset-0 z-30 bg-black/45"
         />
-      </div>
+      ) : null}
 
-      <aside className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9.5rem)] lg:overflow-auto">
-        <div className="grid grid-cols-2 gap-2 rounded-lg border bg-card p-1 sm:hidden">
+      <aside
+        className={`absolute right-0 top-0 z-40 h-full w-full max-w-[22rem] space-y-3 border-l border-zinc-700 bg-background p-3 transition-transform duration-200 ${
+          panelOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card p-1">
           <button
             type="button"
             onClick={() => setMobilePanel("status")}
@@ -370,9 +390,16 @@ export function PaintWorkbench({
           >
             Utkast
           </button>
+          <button
+            type="button"
+            onClick={() => setPanelOpen(false)}
+            className="rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-background"
+          >
+            Lukk
+          </button>
         </div>
 
-        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "drafts" ? "hidden sm:block" : ""}`}>
+        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "drafts" ? "hidden" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Detektor-status</h2>
             <span className="text-xs text-muted-foreground">
@@ -491,7 +518,7 @@ export function PaintWorkbench({
           )}
         </section>
 
-        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "status" ? "hidden sm:block" : ""}`}>
+        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "status" ? "hidden" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Utkast på bruker</h2>
             <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>
