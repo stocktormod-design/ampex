@@ -123,11 +123,12 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
     if (!view) return;
 
     const updateFit = () => {
-      const horizontalPadding = view.clientWidth < 640 ? 16 : 32;
-      const verticalPadding = view.clientWidth < 640 ? 16 : 32;
+      const isMobileViewport = view.clientWidth < 640;
+      const horizontalPadding = isMobileViewport ? 0 : 32;
+      const verticalPadding = isMobileViewport ? 0 : 32;
       const vw = Math.max(220, view.clientWidth - horizontalPadding);
       const vh = Math.max(180, view.clientHeight - verticalPadding);
-      const fit = Math.min(vw / stageSize.w, vh / stageSize.h);
+      const fit = isMobileViewport ? Math.max(vw / stageSize.w, vh / stageSize.h) : Math.min(vw / stageSize.w, vh / stageSize.h);
       setFitZoom(clampZoom(fit));
     };
 
@@ -200,8 +201,8 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-2 sm:p-4">
-        <div className="mx-auto flex min-h-full min-w-full items-center justify-center">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-0 sm:p-4">
+        <div className="mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center">
           <div
             className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
