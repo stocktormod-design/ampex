@@ -218,8 +218,18 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
                   style={{ imageRendering: "auto" }}
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-zinc-100 p-4 text-center text-sm text-zinc-600">
-                  {pdfLoadError ?? "Laster PDF..."}
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-zinc-100 p-4 text-center text-sm text-zinc-600">
+                  <p>{pdfLoadError ?? "Laster PDF..."}</p>
+                  {pdfLoadError ? (
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Åpne PDF
+                    </a>
+                  ) : null}
                 </div>
               )
             ) : (
