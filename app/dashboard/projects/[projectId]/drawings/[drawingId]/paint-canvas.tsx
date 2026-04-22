@@ -74,6 +74,7 @@ function drawItem(ctx: CanvasRenderingContext2D, item: OverlayItem, color: strin
 
 export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers, activeLayerId, onUpdateLayers }: Props) {
   const [zoom, setZoom] = useState(1);
+  const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [draft, setDraft] = useState<DraftShape>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -83,6 +84,7 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
   const activeLayer = useMemo(() => layers.find((l) => l.id === activeLayerId) ?? null, [layers, activeLayerId]);
   const stageW = stageSize.w;
   const stageH = stageSize.h;
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isPdf) {
@@ -98,6 +100,30 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
     image.onerror = () => setStageSize(DEFAULT_STAGE);
     image.src = fileUrl;
   }, [fileUrl, isPdf]);
+
+  useEffect(() => {
+    const view = viewportRef.current;
+    if (!view) return;
+
+    const updateFit = () => {
+      const vw = Math.max(320, view.clientWidth - 40);
+      const vh = Math.max(220, view.clientHeight - 40);
+      const fit = Math.min(vw / stageW, vh / stageH);
+      const clamped = Math.max(0.2, Math.min(4, +fit.toFixed(2)));
+      setFitZoom(clamped);
+      setZoom((prev) => {
+        if (Math.abs(prev - 1) < 0.001 || Math.abs(prev - fitZoom) < 0.001) {
+          return clamped;
+        }
+        return prev;
+      });
+    };
+
+    updateFit();
+    const ro = new ResizeObserver(updateFit);
+    ro.observe(view);
+    return () => ro.disconnect();
+  }, [stageW, stageH, fitZoom]);
 
   function pointerToStage(e: PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -224,10 +250,17 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
           >
             Reset
           </button>
+          <button
+            type="button"
+            onClick={() => setZoom(fitZoom)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+          >
+            Fit
+          </button>
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-6">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-4">
         <div className="mx-auto w-fit">
           <div
             className="relative overflow-hidden rounded-md border bg-white shadow-sm"
@@ -246,14 +279,15 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
               <img
                 src={fileUrl}
                 alt={drawingName}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-fill"
+                style={{ imageRendering: "auto", pointerEvents: "none" }}
               />
             )}
             <canvas
               ref={canvasRef}
               width={stageW}
               height={stageH}
-              className="absolute inset-0 h-full w-full cursor-crosshair"
+              className="absolute inset-0 z-10 h-full w-full cursor-crosshair"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}

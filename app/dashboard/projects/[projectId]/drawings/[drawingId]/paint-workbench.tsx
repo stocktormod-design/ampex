@@ -108,6 +108,19 @@ export function PaintWorkbench({
   }, [layers, activeLayerId]);
 
   useEffect(() => {
+    if (layers.length === 0) {
+      const fallback = [newLayer(1)];
+      setLayers(fallback);
+      setActiveLayerId(fallback[0].id);
+      return;
+    }
+    const hasActive = layers.some((l) => l.id === activeLayerId);
+    if (!hasActive) {
+      setActiveLayerId(layers[0].id);
+    }
+  }, [layers, activeLayerId]);
+
+  useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(layers));
   }, [layers, storageKey]);
 
@@ -223,7 +236,7 @@ export function PaintWorkbench({
 
   return (
     <div className="space-y-3">
-      <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-lg border bg-background lg:flex-row">
+      <div className="flex h-[calc(100vh-9.5rem)] min-h-[620px] flex-col overflow-hidden rounded-lg border bg-background lg:flex-row">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}

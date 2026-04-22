@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { MousePointer2, Flame, Slash, RectangleHorizontal, Type, Eraser, Layers3, Eye, EyeOff, Plus } from "lucide-react";
 import type { OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type ToolDef = {
@@ -17,6 +18,15 @@ const TOOLS: ToolDef[] = [
   { id: "text", label: "Tekst", hint: "Legg inn tekst-annotasjon" },
   { id: "erase", label: "Slett", hint: "Fjern markeringer" },
 ];
+
+const ICONS: Record<ToolId, typeof MousePointer2> = {
+  select: MousePointer2,
+  detector: Flame,
+  line: Slash,
+  rect: RectangleHorizontal,
+  text: Type,
+  erase: Eraser,
+};
 
 type Props = {
   activeTool: ToolId;
@@ -42,83 +52,94 @@ export function PaintToolbar({
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
 
   return (
-    <aside className="w-full max-w-[18rem] shrink-0 border-l bg-card">
-      <div className="space-y-3 p-3">
+    <aside className="w-full max-w-[4.25rem] shrink-0 border-l bg-card">
+      <div className="space-y-2 p-2">
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Verktøy</h2>
-          <p className="text-[11px] text-muted-foreground">Overlay-lag over tegningen.</p>
+          <h2 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</h2>
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           {TOOLS.map((tool) => (
-            <button
-              key={tool.id}
-              type="button"
-              onClick={() => onSelectTool(tool.id)}
-              className={`rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors ${
-                activeTool === tool.id
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-border bg-background hover:bg-muted"
-              }`}
-            >
-              <span className="font-medium">{tool.label}</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">{tool.hint}</span>
-            </button>
+            (() => {
+              const Icon = ICONS[tool.id];
+              return (
+                <button
+                  key={tool.id}
+                  type="button"
+                  title={`${tool.label} — ${tool.hint}`}
+                  onClick={() => onSelectTool(tool.id)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
+                    activeTool === tool.id
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="size-4" aria-hidden />
+                </button>
+              );
+            })()
           ))}
         </div>
 
-        <div className="rounded-md border border-border bg-muted/30 p-2.5">
-          <p className="text-xs font-medium">Aktivt verktøy</p>
-          <p className="mt-0.5 text-xs">{current.label}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{current.hint}</p>
+        <div className="rounded-md border border-border bg-muted/30 p-2">
+          <p className="text-[10px] font-medium">Aktiv</p>
+          <p className="mt-0.5 truncate text-[10px]">{current.label}</p>
         </div>
 
-        <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2.5">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium">Lag</p>
+        <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2">
+          <div className="flex items-center justify-center">
+            <Layers3 className="size-3.5 text-muted-foreground" aria-hidden />
+          </div>
+          <div className="space-y-1">
+            {layers.map((layer) => (
+              <button
+                key={layer.id}
+                type="button"
+                title={`${layer.name} (${layer.items.length})`}
+                onClick={() => onSetActiveLayer(layer.id)}
+                className={`relative flex h-7 w-9 items-center justify-center rounded border ${
+                  activeLayerId === layer.id ? "border-primary bg-primary/10" : "border-border bg-background hover:bg-muted"
+                }`}
+              >
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: layer.color }} />
+                <span className="absolute -right-1 -top-1 rounded bg-muted px-1 text-[9px] text-muted-foreground">
+                  {layer.items.length}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-1 pt-1">
             <button
               type="button"
               onClick={onAddLayer}
-              className="rounded border border-input bg-background px-1.5 py-0.5 text-[11px] hover:bg-muted"
+              title="Nytt lag"
+              className="flex h-7 items-center justify-center rounded border border-input bg-background hover:bg-muted"
             >
-              + Nytt lag
+              <Plus className="size-3.5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              title="Vis/skjul aktivt lag"
+              onClick={() => {
+                if (!activeLayerId) return;
+                onToggleLayer(activeLayerId);
+              }}
+              className="flex h-7 items-center justify-center rounded border border-input bg-background hover:bg-muted"
+            >
+              {(layers.find((l) => l.id === activeLayerId)?.visible ?? true) ? (
+                <Eye className="size-3.5" aria-hidden />
+              ) : (
+                <EyeOff className="size-3.5" aria-hidden />
+              )}
             </button>
           </div>
-          <ul className="space-y-1">
-            {layers.map((layer) => (
-              <li key={layer.id} className="rounded border border-border bg-background px-2 py-1">
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSetActiveLayer(layer.id)}
-                    className={`min-w-0 flex-1 truncate text-left text-xs ${
-                      activeLayerId === layer.id ? "font-semibold text-foreground" : "text-muted-foreground"
-                    }`}
-                  >
-                    <span
-                      className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-                      style={{ backgroundColor: layer.color }}
-                    />
-                    {layer.name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleLayer(layer.id)}
-                    className="rounded border border-input px-1 py-0.5 text-[10px] hover:bg-muted"
-                  >
-                    {layer.visible ? "Skjul" : "Vis"}
-                  </button>
-                </div>
-                <p className="mt-1 text-[10px] text-muted-foreground">{layer.items.length} elementer</p>
-              </li>
-            ))}
-          </ul>
           <button
             type="button"
+            title="Tøm aktivt lag"
             onClick={onClearActiveLayer}
-            className="w-full rounded border border-destructive/40 bg-background px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
+            className="w-full rounded border border-destructive/40 bg-background px-1 py-1 text-[10px] text-destructive hover:bg-destructive/10"
           >
-            Tøm aktivt lag
+            Tøm
           </button>
         </div>
       </div>

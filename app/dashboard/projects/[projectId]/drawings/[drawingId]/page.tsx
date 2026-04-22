@@ -88,7 +88,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   }));
 
   return (
-    <main className="space-y-4">
+    <main className="-m-4 space-y-3 sm:-m-8">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-1">
           <Link
