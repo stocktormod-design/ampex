@@ -266,6 +266,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                         ) : (
                           <span className="text-xs text-muted-foreground">Kunne ikke lage visningslenke</span>
                         )}
+                        <Link
+                          href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
+                          className="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                        >
+                          Paint view
+                        </Link>
 
                         {isAdmin ? (
                           <>
