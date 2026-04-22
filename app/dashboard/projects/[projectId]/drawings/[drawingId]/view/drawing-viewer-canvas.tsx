@@ -50,8 +50,11 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
           throw new Error("Kunne ikke hente PDF");
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-        const task = pdfjs.getDocument(bytes);
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+          pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
+        const task = pdfjs.getDocument({ data: bytes });
         const pdf = await task.promise;
         const page = await pdf.getPage(1);
 
@@ -65,7 +68,7 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
           throw new Error("Kunne ikke initialisere PDF-canvas");
         }
 
-        await page.render({ canvas, canvasContext: ctx, viewport: renderViewport }).promise;
+        await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
         if (!blob) {
           throw new Error("Kunne ikke konvertere PDF");
