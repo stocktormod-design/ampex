@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
-import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
+import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -80,10 +79,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
         </span>
       </div>
 
-      <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-lg border bg-background lg:flex-row">
-        <PaintCanvas fileUrl={signed.signedUrl} filePath={drawing.file_path} drawingName={drawing.name} />
-        <PaintToolbar />
-      </div>
+      <PaintWorkbench fileUrl={signed.signedUrl} filePath={drawing.file_path} drawingName={drawing.name} />
     </main>
   );
 }

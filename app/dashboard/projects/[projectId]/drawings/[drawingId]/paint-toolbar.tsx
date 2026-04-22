@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-type ToolId = "select" | "detector" | "line" | "rect" | "text" | "erase";
+import { useMemo } from "react";
+import type { OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type ToolDef = {
   id: ToolId;
@@ -19,8 +18,27 @@ const TOOLS: ToolDef[] = [
   { id: "erase", label: "Slett", hint: "Fjern markeringer" },
 ];
 
-export function PaintToolbar() {
-  const [activeTool, setActiveTool] = useState<ToolId>("select");
+type Props = {
+  activeTool: ToolId;
+  onSelectTool: (tool: ToolId) => void;
+  layers: OverlayLayer[];
+  activeLayerId: string;
+  onSetActiveLayer: (layerId: string) => void;
+  onAddLayer: () => void;
+  onToggleLayer: (layerId: string) => void;
+  onClearActiveLayer: () => void;
+};
+
+export function PaintToolbar({
+  activeTool,
+  onSelectTool,
+  layers,
+  activeLayerId,
+  onSetActiveLayer,
+  onAddLayer,
+  onToggleLayer,
+  onClearActiveLayer,
+}: Props) {
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
 
   return (
@@ -36,7 +54,7 @@ export function PaintToolbar() {
             <button
               key={tool.id}
               type="button"
-              onClick={() => setActiveTool(tool.id)}
+              onClick={() => onSelectTool(tool.id)}
               className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                 activeTool === tool.id
                   ? "border-primary bg-primary/10 text-foreground"
@@ -53,6 +71,55 @@ export function PaintToolbar() {
           <p className="text-xs font-medium">Aktivt verktøy</p>
           <p className="mt-1 text-sm">{current.label}</p>
           <p className="mt-1 text-xs text-muted-foreground">{current.hint}</p>
+        </div>
+
+        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">Lag</p>
+            <button
+              type="button"
+              onClick={onAddLayer}
+              className="rounded border border-input bg-background px-2 py-0.5 text-xs hover:bg-muted"
+            >
+              + Nytt lag
+            </button>
+          </div>
+          <ul className="space-y-1.5">
+            {layers.map((layer) => (
+              <li key={layer.id} className="rounded border border-border bg-background px-2 py-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSetActiveLayer(layer.id)}
+                    className={`min-w-0 flex-1 truncate text-left text-xs ${
+                      activeLayerId === layer.id ? "font-semibold text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <span
+                      className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
+                      style={{ backgroundColor: layer.color }}
+                    />
+                    {layer.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleLayer(layer.id)}
+                    className="rounded border border-input px-1.5 py-0.5 text-[10px] hover:bg-muted"
+                  >
+                    {layer.visible ? "Skjul" : "Vis"}
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">{layer.items.length} elementer</p>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={onClearActiveLayer}
+            className="w-full rounded border border-destructive/40 bg-background px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+          >
+            Tøm aktivt lag
+          </button>
         </div>
       </div>
     </aside>
