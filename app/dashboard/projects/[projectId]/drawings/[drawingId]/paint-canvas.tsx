@@ -8,9 +8,12 @@ type Props = {
   filePath: string;
   drawingName: string;
   activeTool: ToolId;
-  layers: OverlayLayer[];
+  publishedLayers: OverlayLayer[];
+  draftLayers: OverlayLayer[];
   activeLayerId: string;
   onUpdateLayers: (updater: (prev: OverlayLayer[]) => OverlayLayer[]) => void;
+  selectedDraftDetector: { layerId: string; itemId: string } | null;
+  onSelectDraftDetector: (selection: { layerId: string; itemId: string } | null) => void;
 };
 
 function fileExt(path: string): string {
@@ -34,12 +37,26 @@ function normalizeRect(x1: number, y1: number, x2: number, y2: number) {
   return { x, y, w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
 }
 
-function drawItem(ctx: CanvasRenderingContext2D, item: OverlayItem, color: string) {
+function drawItem(
+  ctx: CanvasRenderingContext2D,
+  item: OverlayItem,
+  color: string,
+  isSelectedDetector: boolean,
+) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
 
   if (item.type === "detector") {
+    if (isSelectedDetector) {
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 13, 0, Math.PI * 2);
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+    }
     ctx.beginPath();
     ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
     ctx.fill();
@@ -72,7 +89,18 @@ function drawItem(ctx: CanvasRenderingContext2D, item: OverlayItem, color: strin
   }
 }
 
-export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers, activeLayerId, onUpdateLayers }: Props) {
+export function PaintCanvas({
+  fileUrl,
+  filePath,
+  drawingName,
+  activeTool,
+  publishedLayers,
+  draftLayers,
+  activeLayerId,
+  onUpdateLayers,
+  selectedDraftDetector,
+  onSelectDraftDetector,
+}: Props) {
   const [zoom, setZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
@@ -81,7 +109,8 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ext = fileExt(filePath);
   const isPdf = ext === "pdf";
-  const activeLayer = useMemo(() => layers.find((l) => l.id === activeLayerId) ?? null, [layers, activeLayerId]);
+  const allLayers = useMemo(() => [...publishedLayers, ...draftLayers], [publishedLayers, draftLayers]);
+  const activeLayer = useMemo(() => draftLayers.find((l) => l.id === activeLayerId) ?? null, [draftLayers, activeLayerId]);
   const stageW = stageSize.w;
   const stageH = stageSize.h;
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +169,23 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
     );
   }
 
+  function findDraftDetectorAt(x: number, y: number) {
+    const hitRadius = 12;
+    for (const layer of draftLayers) {
+      if (!layer.visible) continue;
+      for (let i = layer.items.length - 1; i >= 0; i -= 1) {
+        const item = layer.items[i];
+        if (item.type !== "detector") continue;
+        const dx = item.x - x;
+        const dy = item.y - y;
+        if (Math.hypot(dx, dy) <= hitRadius) {
+          return { layerId: layer.id, itemId: item.id };
+        }
+      }
+    }
+    return null;
+  }
+
   function eraseLast() {
     if (!activeLayer) return;
     onUpdateLayers((prev) =>
@@ -156,24 +202,47 @@ export function PaintCanvas({ fileUrl, filePath, drawingName, activeTool, layers
     if (!ctx) return;
     ctx.clearRect(0, 0, stageW, stageH);
 
-    for (const layer of layers) {
+    for (const layer of allLayers) {
       if (!layer.visible) continue;
       for (const item of layer.items) {
-        drawItem(ctx, item, layer.color);
+        const isSelected =
+          item.type === "detector" &&
+          selectedDraftDetector?.layerId === layer.id &&
+          selectedDraftDetector?.itemId === item.id;
+        drawItem(ctx, item, layer.color, Boolean(isSelected));
       }
     }
 
     if (draft && activeLayer) {
-      drawItem(ctx, draft as OverlayItem, activeLayer.color);
+      drawItem(ctx, draft as OverlayItem, activeLayer.color, false);
     }
-  }, [layers, draft, activeLayer, stageW, stageH]);
+  }, [allLayers, draft, activeLayer, selectedDraftDetector, stageW, stageH]);
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!activeLayer) return;
     const pt = pointerToStage(e);
+    const hitDetector = findDraftDetectorAt(pt.x, pt.y);
+    if (hitDetector) {
+      onSelectDraftDetector(hitDetector);
+      return;
+    }
+    onSelectDraftDetector(null);
 
     if (activeTool === "detector") {
-      addToActive({ id: crypto.randomUUID(), type: "detector", x: pt.x, y: pt.y });
+      addToActive({
+        id: crypto.randomUUID(),
+        type: "detector",
+        x: pt.x,
+        y: pt.y,
+        checklist: {
+          baseMounted: false,
+          detectorMounted: false,
+          capOn: null,
+          comment: "",
+          photoDataUrl: null,
+          updatedAt: null,
+        },
+      });
       return;
     }
     if (activeTool === "text") {

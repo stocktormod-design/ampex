@@ -5,6 +5,7 @@ import { publishOverlayItem } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
 import type {
+  DetectorChecklist,
   OverlayItem,
   OverlayLayer,
   OverlayVisibility,
@@ -48,6 +49,18 @@ function isOverlayItem(value: unknown): value is OverlayItem {
   return v.type === "detector" || v.type === "line" || v.type === "rect" || v.type === "text";
 }
 
+function toChecklist(value?: DetectorChecklist): DetectorChecklist {
+  const v = (value ?? {}) as Partial<DetectorChecklist>;
+  return {
+    baseMounted: Boolean(v.baseMounted),
+    detectorMounted: Boolean(v.detectorMounted),
+    capOn: v.capOn === "yes" || v.capOn === "no" ? v.capOn : null,
+    comment: typeof v.comment === "string" ? v.comment : "",
+    photoDataUrl: typeof v.photoDataUrl === "string" ? v.photoDataUrl : null,
+    updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
+  };
+}
+
 export function PaintWorkbench({
   drawingId,
   currentUserId,
@@ -61,7 +74,9 @@ export function PaintWorkbench({
   const [activeLayerId, setActiveLayerId] = useState<string>("");
   const [publishedOverlays, setPublishedOverlays] = useState<PublishedOverlay[]>(initialPublished);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
+  const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
@@ -138,6 +153,7 @@ export function PaintWorkbench({
 
   function clearActiveLayer() {
     setLayers((prev) => prev.map((l) => (l.id === activeLayerId ? { ...l, items: [] } : l)));
+    setSelectedDraftDetector(null);
   }
 
   const publishedLayers = useMemo<OverlayLayer[]>(() => {
@@ -177,6 +193,15 @@ export function PaintWorkbench({
     return out;
   }, [layers]);
 
+  const selectedDraftDetectorItem = useMemo(() => {
+    if (!selectedDraftDetector) return null;
+    const layer = layers.find((l) => l.id === selectedDraftDetector.layerId);
+    if (!layer) return null;
+    const item = layer.items.find((i) => i.id === selectedDraftDetector.itemId);
+    if (!item || item.type !== "detector") return null;
+    return { layer, item };
+  }, [layers, selectedDraftDetector]);
+
   function removeDraftRow(row: DraftPublishRow) {
     setLayers((prev) =>
       prev.map((layer) =>
@@ -188,6 +213,50 @@ export function PaintWorkbench({
           : layer,
       ),
     );
+  }
+
+  function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist>) {
+    if (!selectedDraftDetector) return;
+    setLayers((prev) =>
+      prev.map((layer) => {
+        if (layer.id !== selectedDraftDetector.layerId) return layer;
+        return {
+          ...layer,
+          items: layer.items.map((item) => {
+            if (item.id !== selectedDraftDetector.itemId || item.type !== "detector") return item;
+            const current = toChecklist(item.checklist);
+            return {
+              ...item,
+              checklist: {
+                ...current,
+                ...next,
+                updatedAt: new Date().toISOString(),
+              },
+            };
+          }),
+        };
+      }),
+    );
+  }
+
+  async function onAttachPhoto(file: File | null) {
+    if (!file) return;
+    setDraftError(null);
+    if (!file.type.startsWith("image/")) {
+      setDraftError("Kun bildefiler støttes som vedlegg.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setDraftError("Bildet er for stort. Maks 2 MB per detektor.");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("Kunne ikke lese filen"));
+      reader.readAsDataURL(file);
+    });
+    updateSelectedDetectorChecklist({ photoDataUrl: dataUrl });
   }
 
   function publishOne(row: DraftPublishRow) {
@@ -242,9 +311,12 @@ export function PaintWorkbench({
           filePath={filePath}
           drawingName={drawingName}
           activeTool={activeTool}
-          layers={[...publishedLayers, ...layers]}
+          publishedLayers={publishedLayers}
+          draftLayers={layers}
           activeLayerId={activeLayerId}
           onUpdateLayers={setLayers}
+          selectedDraftDetector={selectedDraftDetector}
+          onSelectDraftDetector={setSelectedDraftDetector}
         />
         <PaintToolbar
           activeTool={activeTool}
@@ -257,6 +329,122 @@ export function PaintWorkbench({
           onClearActiveLayer={clearActiveLayer}
         />
       </div>
+
+      <section className="rounded-lg border bg-card p-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Detektor-status</h2>
+          <span className="text-xs text-muted-foreground">
+            {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et detektor-punkt"}
+          </span>
+        </div>
+        {selectedDraftDetectorItem ? (
+          <div className="mt-3 grid gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={toChecklist(selectedDraftDetectorItem.item.checklist).baseMounted}
+                onChange={(e) => updateSelectedDetectorChecklist({ baseMounted: e.target.checked })}
+              />
+              Sokkel montert
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={toChecklist(selectedDraftDetectorItem.item.checklist).detectorMounted}
+                onChange={(e) => updateSelectedDetectorChecklist({ detectorMounted: e.target.checked })}
+              />
+              Detektor montert
+            </label>
+            <div className="space-y-1">
+              <p className="text-xs font-medium">Kappe</p>
+              <div className="flex gap-3 text-sm">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="capOn"
+                    checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "yes"}
+                    onChange={() => updateSelectedDetectorChecklist({ capOn: "yes" })}
+                  />
+                  Ja
+                </label>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="capOn"
+                    checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "no"}
+                    onChange={() => updateSelectedDetectorChecklist({ capOn: "no" })}
+                  />
+                  Nei
+                </label>
+                <button
+                  type="button"
+                  onClick={() => updateSelectedDetectorChecklist({ capOn: null })}
+                  className="rounded border border-input px-1.5 text-xs hover:bg-muted"
+                >
+                  Nullstill
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Kommentar</label>
+              <textarea
+                value={toChecklist(selectedDraftDetectorItem.item.checklist).comment}
+                onChange={(e) => updateSelectedDetectorChecklist({ comment: e.target.value })}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                placeholder="F.eks. Mangler strøm, følger opp i morgen..."
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Bildevedlegg</label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                  Ta bilde
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      void onAttachPhoto(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                  Velg fil
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      void onAttachPhoto(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Mobil: «Ta bilde» åpner kamera direkte. Fungerer for både felt og kontor.
+              </p>
+              {toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ? (
+                <img
+                  src={toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ?? ""}
+                  alt="Vedlegg"
+                  className="mt-1 h-24 rounded border object-cover"
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Ingen vedlegg ennå.</p>
+              )}
+              {draftError ? <p className="text-xs text-destructive">{draftError}</p> : null}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Klikk på et detektor-punkt i tegningen for å redigere status-checklist.
+          </p>
+        )}
+      </section>
 
       <section className="rounded-lg border bg-card p-3">
         <div className="flex items-center justify-between">
