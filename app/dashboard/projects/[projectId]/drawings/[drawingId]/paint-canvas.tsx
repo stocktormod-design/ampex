@@ -188,7 +188,6 @@ export function PaintCanvas({
         const pdf = await task.promise;
         const page = await pdf.getPage(1);
 
-        const baseViewport = page.getViewport({ scale: 1 });
         const renderViewport = page.getViewport({ scale: 2 });
         const renderCanvas = document.createElement("canvas");
         renderCanvas.width = Math.ceil(renderViewport.width);
