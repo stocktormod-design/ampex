@@ -57,6 +57,7 @@ export default async function DashboardLayout({
               )}
             </Link>
             <DashboardNavLinks
+              canViewProjects={Boolean(profile?.company_id)}
               canManageUsers={Boolean(canManageUsers)}
               canManageLager={Boolean(canManageUsers)}
             />

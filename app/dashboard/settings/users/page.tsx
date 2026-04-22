@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { createUser } from "@/app/dashboard/settings/users/actions";
+import { DeleteUserForm } from "@/app/dashboard/settings/users/delete-user-form";
 import { createClient } from "@/lib/supabase/server";
 import { roleLabel } from "@/lib/roles";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -73,6 +74,18 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     .order("created_at", { ascending: true });
   const users = (usersData ?? []) as CompanyUser[];
 
+  function mayDelete(target: CompanyUser, myId: string, myRole: string): boolean {
+    if (target.id === myId) return false;
+    const t = target.role === "worker" ? "montor" : target.role;
+    if (t === "owner") return false;
+    if (myRole === "owner") return true;
+    if (myRole === "admin") return t === "montor" || t === "apprentice";
+    return false;
+  }
+
+  const viewerId = user.id;
+  const viewerRole = profile.role;
+
   return (
     <main className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -83,7 +96,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Brukere</h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Owner og admin kan legge til brukere i{" "}
+              Owner og admin kan legge til og slette brukere i{" "}
               <span className="font-medium text-foreground">{companyName ?? "firmaet"}</span>.
             </p>
           </div>
@@ -140,7 +153,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                   <AlertDescription>{searchParams.error}</AlertDescription>
                 </Alert>
               ) : null}
-              {searchParams?.success ? (
+              {searchParams?.success === "deleted" ? (
+                <Alert>
+                  <AlertDescription>Brukeren ble slettet.</AlertDescription>
+                </Alert>
+              ) : null}
+              {searchParams?.success === "1" ? (
                 <Alert>
                   <AlertDescription>Bruker ble opprettet.</AlertDescription>
                 </Alert>
@@ -154,19 +172,21 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
           <CardHeader>
             <CardTitle className="text-lg">Team</CardTitle>
             <CardDescription>
-              {users.length} bruker{users.length === 1 ? "" : "e"}
+              {users.length} bruker{users.length === 1 ? "" : "e"}. Admin kan slette montør og lærling; owner kan også
+              slette admin. Owner-kontoer kan ikke slettes her.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y border-t">
-              <div className="grid grid-cols-[1fr_auto] gap-2 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <span>Navn</span>
                 <span className="text-right">Rolle</span>
+                <span className="text-right">Handling</span>
               </div>
               {users.map((u) => (
                 <div
                   key={u.id}
-                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-sm"
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 text-sm"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{u.full_name?.trim() || "Uten navn"}</p>
@@ -175,10 +195,17 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                     </p>
                   </div>
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${roleClass(u.role)}`}
+                    className={`inline-flex justify-self-end rounded-full px-2.5 py-0.5 text-xs font-medium ${roleClass(u.role)}`}
                   >
                     {roleLabel(u.role)}
                   </span>
+                  <div className="justify-self-end">
+                    <DeleteUserForm
+                      userId={u.id}
+                      displayName={u.full_name?.trim() || "Uten navn"}
+                      disabled={!mayDelete(u, viewerId, viewerRole)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

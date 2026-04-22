@@ -41,8 +41,7 @@ export default async function DashboardHomePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hei, {name}</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Velkommen til dashbordet. Her samles prosjekter, tegninger og lager etter hvert som modulene
-          blir klare.
+          Velkommen til dashbordet. Prosjekter med PDF-tegninger støtter nå utkast og publisering.
         </p>
       </div>
       <div className="grid gap-6 md:grid-cols-2">
@@ -55,14 +54,20 @@ export default async function DashboardHomePage() {
             {profile.role === "owner" || profile.role === "admin" ? (
               <>
                 <Link
-                  href="/dashboard/lager"
+                  href="/dashboard/projects"
                   className={cn(buttonVariants({ variant: "default" }), "inline-flex")}
+                >
+                  Prosjekter
+                </Link>
+                <Link
+                  href="/dashboard/lager"
+                  className={cn(buttonVariants({ variant: "secondary" }), "inline-flex")}
                 >
                   Lager
                 </Link>
                 <Link
                   href="/dashboard/settings/users"
-                  className={cn(buttonVariants({ variant: "secondary" }), "inline-flex")}
+                  className={cn(buttonVariants({ variant: "outline" }), "inline-flex")}
                 >
                   Administrer brukere
                 </Link>
