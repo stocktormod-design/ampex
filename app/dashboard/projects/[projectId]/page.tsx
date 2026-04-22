@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FileText } from "lucide-react";
-import { deleteDraftDrawing, publishDrawing, unpublishDrawing, uploadDrawingPdf } from "@/app/dashboard/projects/actions";
+import {
+  convertProjectImagesToPdf,
+  deleteDraftDrawing,
+  publishDrawing,
+  unpublishDrawing,
+  uploadDrawingPdf,
+} from "@/app/dashboard/projects/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
@@ -141,14 +147,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       ) : null}
       {searchParams?.success ? (
         <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          Endringen ble lagret.
+          {searchParams.success.startsWith("converted-")
+            ? `Konverterte ${searchParams.success.replace("converted-", "")} bildefiler til PDF.`
+            : "Endringen ble lagret."}
         </p>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="border shadow-sm lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg">Last opp PDF-tegning</CardTitle>
+            <CardTitle className="text-lg">Last opp tegning</CardTitle>
             <CardDescription>
               {isAdmin ? "Ny tegning lagres som utkast til den publiseres." : "Kun admin kan laste opp tegninger."}
             </CardDescription>
@@ -165,16 +173,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                   <NativeInput id="drawing-revision" name="revision" placeholder="Rev B" autoComplete="off" />
                 </div>
                 <div className="space-y-2">
-                  <NativeLabel htmlFor="pdf-file">PDF-fil</NativeLabel>
+                  <NativeLabel htmlFor="pdf-file">Fil</NativeLabel>
                   <input
                     id="pdf-file"
                     name="pdf_file"
                     type="file"
-                    accept="application/pdf,.pdf"
+                    accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                     required
                     className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium"
                   />
-                  <p className="text-xs text-muted-foreground">Maks 25 MB.</p>
+                  <p className="text-xs text-muted-foreground">Tillatt: PDF, JPEG, PNG. Maks 25 MB.</p>
                 </div>
                 <SubmitButton className="w-full">Last opp utkast</SubmitButton>
               </form>
@@ -183,6 +191,21 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 Du kan se publiserte tegninger og filtrere listen.
               </p>
             )}
+
+            {isAdmin ? (
+              <form action={convertProjectImagesToPdf} className="mt-4 border-t pt-4">
+                <input type="hidden" name="project_id" value={project.id} />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
+                >
+                  Konverter alle JPG/PNG til PDF (sluttføring)
+                </button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Kjører på alle tegningsfiler i prosjektet som ikke allerede er PDF.
+                </p>
+              </form>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -238,7 +261,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
                           >
                             <FileText className="size-3.5" aria-hidden />
-                            Åpne PDF
+                            Åpne fil
                           </a>
                         ) : (
                           <span className="text-xs text-muted-foreground">Kunne ikke lage visningslenke</span>

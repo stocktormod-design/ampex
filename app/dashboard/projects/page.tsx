@@ -92,7 +92,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Prosjekter</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Prosjekter med PDF-tegninger i utkast/publisert-flyt.
+            Prosjekter med tegningsfiler (PDF/JPEG/PNG) i utkast/publisert-flyt.
           </p>
         </div>
       </div>

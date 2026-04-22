@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminRole } from "@/lib/roles";
 
-const MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const PROJECT_STATUS = new Set(["planning", "active", "completed"]);
+const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
 
 type CompanyProfile = {
   company_id: string | null;
@@ -20,10 +24,72 @@ type AdminContext = {
   adminClient: ReturnType<typeof createAdminClient>;
 };
 
+type DrawingOwnedRow = {
+  id: string;
+  project_id: string;
+  file_path: string;
+  is_published: boolean;
+  projects: { company_id: string }[] | null;
+};
+
 function sanitizeFileName(value: string): string {
-  const base = value.trim().toLowerCase().replace(/\.pdf$/i, "");
+  const base = value.trim().toLowerCase().replace(/\.(pdf|jpe?g|png)$/i, "");
   const clean = base.replace(/[^a-z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   return clean || "tegning";
+}
+
+function getExtension(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  const idx = lower.lastIndexOf(".");
+  return idx === -1 ? "" : lower.slice(idx + 1);
+}
+
+function isImageExtension(ext: string): boolean {
+  return ext === "jpg" || ext === "jpeg" || ext === "png";
+}
+
+async function maybeUpscaleImage(file: File, ext: string) {
+  if (!isImageExtension(ext)) {
+    return {
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type || (ext === "png" ? "image/png" : "image/jpeg"),
+      finalExt: ext,
+      wasUpscaled: false,
+    };
+  }
+
+  const input = Buffer.from(await file.arrayBuffer());
+  const image = sharp(input);
+  const meta = await image.metadata();
+  const width = meta.width ?? 0;
+  const height = meta.height ?? 0;
+
+  if (width <= 0 || height <= 0) {
+    throw new Error("Kunne ikke lese bildet");
+  }
+
+  const targetWidth = Math.min(width * 2, 8000);
+  const targetHeight = Math.min(height * 2, 8000);
+
+  let pipeline = image.resize(targetWidth, targetHeight, {
+    fit: "inside",
+    kernel: sharp.kernel.lanczos3,
+    withoutEnlargement: false,
+  });
+
+  if (ext === "png") {
+    pipeline = pipeline.png({ compressionLevel: 9 });
+  } else {
+    pipeline = pipeline.jpeg({ quality: 95, mozjpeg: true });
+  }
+
+  const out = await pipeline.toBuffer();
+  return {
+    bytes: new Uint8Array(out),
+    contentType: ext === "png" ? "image/png" : "image/jpeg",
+    finalExt: ext === "png" ? "png" : "jpg",
+    wasUpscaled: true,
+  };
 }
 
 function projectPath(projectId: string): string {
@@ -76,6 +142,10 @@ async function ensureProjectInCompany(adminClient: ReturnType<typeof createAdmin
   return { ok: true as const };
 }
 
+function rowToOwned(data: unknown): DrawingOwnedRow {
+  return data as DrawingOwnedRow;
+}
+
 export async function createProject(formData: FormData) {
   const { userId, companyId, adminClient } = await requireAdminContext();
 
@@ -121,23 +191,44 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
   const fileInput = formData.get("pdf_file");
 
   if (!(fileInput instanceof File) || fileInput.size === 0) {
-    redirectProjectError(projectId, "Velg en PDF-fil");
+    redirectProjectError(projectId, "Velg en fil (PDF, JPEG eller PNG)");
   }
-  if (fileInput.size > MAX_PDF_BYTES) {
-    redirectProjectError(projectId, "PDF er for stor. Maks størrelse er 25 MB.");
+  if (fileInput.size > MAX_UPLOAD_BYTES) {
+    redirectProjectError(projectId, "Filen er for stor. Maks størrelse er 25 MB.");
   }
 
   const lowerName = fileInput.name.toLowerCase();
-  if (fileInput.type !== "application/pdf" && !lowerName.endsWith(".pdf")) {
-    redirectProjectError(projectId, "Kun PDF-filer er tillatt");
+  const ext = lowerName.includes(".") ? lowerName.split(".").pop() ?? "" : "";
+  if (!ALLOWED_MIME.has(fileInput.type) && !ALLOWED_EXT.has(ext)) {
+    redirectProjectError(projectId, "Kun PDF, JPEG eller PNG er tillatt");
   }
 
-  const drawingName = drawingNameInput || lowerName.replace(/\.pdf$/i, "") || "Tegning";
+  const drawingName = drawingNameInput || lowerName.replace(/\.(pdf|jpe?g|png)$/i, "") || "Tegning";
   const safeBase = sanitizeFileName(fileInput.name);
-  const objectPath = `${companyId}/${projectId}/${Date.now()}-${safeBase}-${crypto.randomUUID()}.pdf`;
+  const finalExt = ALLOWED_EXT.has(ext) ? ext : fileInput.type === "application/pdf" ? "pdf" : fileInput.type === "image/png" ? "png" : "jpg";
+  let uploadBlob: File | Blob = fileInput;
+  let uploadExt = finalExt;
+  let contentType = fileInput.type && ALLOWED_MIME.has(fileInput.type) ? fileInput.type : finalExt === "pdf" ? "application/pdf" : finalExt === "png" ? "image/png" : "image/jpeg";
+  let upscaleSuffix = "";
 
-  const { error: uploadError } = await adminClient.storage.from("drawings").upload(objectPath, fileInput, {
-    contentType: "application/pdf",
+  if (isImageExtension(finalExt)) {
+    try {
+      const upscaled = await maybeUpscaleImage(fileInput, finalExt);
+      uploadBlob = new Blob([upscaled.bytes], { type: upscaled.contentType });
+      uploadExt = upscaled.finalExt;
+      contentType = upscaled.contentType;
+      if (upscaled.wasUpscaled) {
+        upscaleSuffix = "-upscaled";
+      }
+    } catch (e) {
+      redirectProjectError(projectId, e instanceof Error ? e.message : "Kunne ikke prosessere bildet");
+    }
+  }
+
+  const objectPath = `${companyId}/${projectId}/${Date.now()}-${safeBase}${upscaleSuffix}-${crypto.randomUUID()}.${uploadExt}`;
+
+  const { error: uploadError } = await adminClient.storage.from("drawings").upload(objectPath, uploadBlob, {
+    contentType,
     upsert: false,
   });
 
@@ -179,19 +270,54 @@ async function getOwnedDrawing(adminClient: ReturnType<typeof createAdminClient>
     return { ok: false as const, error: "Tegning ikke funnet" };
   }
 
-  const row = data as {
-    id: string;
-    project_id: string;
-    file_path: string;
-    is_published: boolean;
-    projects: { company_id: string }[] | null;
-  };
+  const row = rowToOwned(data);
   const ownerCompanyId = row.projects?.[0]?.company_id ?? null;
   if (ownerCompanyId !== companyId) {
     return { ok: false as const, error: "Tegning tilhører ikke firmaet" };
   }
 
   return { ok: true as const, row };
+}
+
+async function convertImageDrawingToPdf(
+  adminClient: ReturnType<typeof createAdminClient>,
+  row: { id: string; file_path: string },
+) {
+  const ext = getExtension(row.file_path);
+  if (!isImageExtension(ext)) {
+    return { converted: false as const };
+  }
+
+  const { data: fileData, error: dlError } = await adminClient.storage.from("drawings").download(row.file_path);
+  if (dlError || !fileData) {
+    throw new Error(dlError?.message ?? "Kunne ikke hente tegning fra storage");
+  }
+
+  const bytes = new Uint8Array(await fileData.arrayBuffer());
+  const pdfDoc = await PDFDocument.create();
+  const embedded = ext === "png" ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+  const page = pdfDoc.addPage([embedded.width, embedded.height]);
+  page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+  const pdfBytes = await pdfDoc.save();
+
+  const base = row.file_path.replace(/\.(png|jpg|jpeg)$/i, "");
+  const pdfPath = `${base}.pdf`;
+  const { error: uploadError } = await adminClient.storage.from("drawings").upload(pdfPath, pdfBytes, {
+    contentType: "application/pdf",
+    upsert: false,
+  });
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const { error: updateError } = await adminClient.from("drawings").update({ file_path: pdfPath }).eq("id", row.id);
+  if (updateError) {
+    await adminClient.storage.from("drawings").remove([pdfPath]);
+    throw new Error(updateError.message);
+  }
+
+  await adminClient.storage.from("drawings").remove([row.file_path]);
+  return { converted: true as const };
 }
 
 export async function publishDrawing(formData: FormData) {
@@ -284,4 +410,34 @@ export async function deleteDraftDrawing(formData: FormData) {
   await adminClient.storage.from("drawings").remove([row.file_path]);
   revalidatePath(projectPath(row.project_id));
   redirect(`${projectPath(row.project_id)}?success=draft-deleted`);
+}
+
+export async function convertProjectImagesToPdf(formData: FormData) {
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  if (!projectId) {
+    redirect("/dashboard/projects?error=Mangler+prosjekt");
+  }
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const projectCheck = await ensureProjectInCompany(adminClient, projectId, companyId);
+  if (!projectCheck.ok) {
+    redirectProjectError(projectId, projectCheck.error);
+  }
+
+  const { data: rows, error } = await adminClient
+    .from("drawings")
+    .select("id, file_path")
+    .eq("project_id", projectId);
+  if (error) {
+    redirectProjectError(projectId, error.message);
+  }
+
+  let convertedCount = 0;
+  for (const row of (rows ?? []) as { id: string; file_path: string }[]) {
+    const result = await convertImageDrawingToPdf(adminClient, row);
+    if (result.converted) convertedCount += 1;
+  }
+
+  revalidatePath(projectPath(projectId));
+  redirect(`${projectPath(projectId)}?success=converted-${convertedCount}`);
 }
