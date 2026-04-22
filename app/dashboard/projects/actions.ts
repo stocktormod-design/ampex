@@ -14,6 +14,7 @@ const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
 const OVERLAY_TOOL_TYPES = new Set(["detector", "line", "rect", "text"]);
 const OVERLAY_VISIBILITY = new Set(["all", "admins"]);
+const MAX_OVERLAY_PHOTO_BYTES = 2 * 1024 * 1024;
 
 type CompanyProfile = {
   company_id: string | null;
@@ -267,6 +268,60 @@ type PublishOverlayInput = {
   payload: unknown;
 };
 
+function parseImageDataUrl(dataUrl: string) {
+  const m = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([a-z0-9+/=]+)$/i);
+  if (!m) {
+    return null;
+  }
+  const mime = m[1].toLowerCase();
+  const base64 = m[2];
+  const bytes = Buffer.from(base64, "base64");
+  if (!bytes || bytes.length === 0) return null;
+  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+  return { mime, bytes, ext };
+}
+
+async function normalizeOverlayPayload(
+  adminClient: ReturnType<typeof createAdminClient>,
+  companyId: string,
+  drawingId: string,
+  toolType: string,
+  payload: unknown,
+) {
+  const normalized = JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
+  if (toolType !== "detector") {
+    return { ok: true as const, payload: normalized };
+  }
+
+  const checklist = (normalized.checklist ?? {}) as Record<string, unknown>;
+  const photoDataUrl = typeof checklist.photoDataUrl === "string" ? checklist.photoDataUrl : null;
+  if (!photoDataUrl) {
+    return { ok: true as const, payload: normalized };
+  }
+
+  const parsed = parseImageDataUrl(photoDataUrl);
+  if (!parsed) {
+    return { ok: false as const, error: "Ugyldig bildevedlegg på detektor" };
+  }
+  if (parsed.bytes.length > MAX_OVERLAY_PHOTO_BYTES) {
+    return { ok: false as const, error: "Bildevedlegg er for stort. Maks 2 MB." };
+  }
+
+  const objectPath = `${companyId}/drawing-overlays/${drawingId}/${crypto.randomUUID()}.${parsed.ext}`;
+  const { error: uploadErr } = await adminClient.storage.from("pin-photos").upload(objectPath, parsed.bytes, {
+    contentType: parsed.mime,
+    upsert: false,
+  });
+  if (uploadErr) {
+    return { ok: false as const, error: uploadErr.message };
+  }
+
+  checklist.photoPath = objectPath;
+  checklist.photoDataUrl = null;
+  normalized.checklist = checklist;
+  return { ok: true as const, payload: normalized };
+}
+
 export async function publishOverlayItem(input: PublishOverlayInput) {
   const { userId, companyId, adminClient } = await requireAdminContext();
   const drawingId = String(input.drawingId ?? "").trim();
@@ -304,6 +359,11 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
     return { ok: false as const, error: "Tegningen tilhører ikke firmaet" };
   }
 
+  const normalized = await normalizeOverlayPayload(adminClient, companyId, drawingId, toolType, payload);
+  if (!normalized.ok) {
+    return { ok: false as const, error: normalized.error };
+  }
+
   const { data, error } = await adminClient
     .from("drawing_overlays")
     .insert({
@@ -312,7 +372,7 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
       tool_type: toolType,
       layer_name: layerName,
       layer_color: layerColor,
-      payload,
+      payload: normalized.payload,
       is_published: true,
       visibility_scope: visibilityScope,
       published_at: new Date().toISOString(),

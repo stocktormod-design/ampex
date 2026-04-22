@@ -6,6 +6,7 @@ export type DetectorChecklist = {
   capOn: "yes" | "no" | null;
   comment: string;
   photoDataUrl: string | null;
+  photoPath?: string | null;
   updatedAt: string | null;
 };
 

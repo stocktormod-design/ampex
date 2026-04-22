@@ -52,7 +52,7 @@ export function PaintToolbar({
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
 
   return (
-    <aside className="w-full max-w-[4.25rem] shrink-0 border-l bg-card">
+    <aside className="w-full max-w-[4.25rem] shrink-0 rounded-lg border bg-card/95 shadow-sm backdrop-blur">
       <div className="space-y-2 p-2">
         <div>
           <h2 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</h2>

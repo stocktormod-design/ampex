@@ -57,6 +57,7 @@ function toChecklist(value?: DetectorChecklist): DetectorChecklist {
     capOn: v.capOn === "yes" || v.capOn === "no" ? v.capOn : null,
     comment: typeof v.comment === "string" ? v.comment : "",
     photoDataUrl: typeof v.photoDataUrl === "string" ? v.photoDataUrl : null,
+    photoPath: typeof v.photoPath === "string" ? v.photoPath : null,
     updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
   };
 }
@@ -304,8 +305,8 @@ export function PaintWorkbench({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex h-[calc(100vh-9.5rem)] min-h-[620px] flex-col overflow-hidden rounded-lg border bg-background lg:flex-row">
+    <div className="grid gap-3 lg:grid-cols-[1fr_22rem]">
+      <div className="relative h-[calc(100vh-9.5rem)] min-h-[620px] overflow-hidden rounded-lg border bg-background">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}
@@ -318,180 +319,189 @@ export function PaintWorkbench({
           selectedDraftDetector={selectedDraftDetector}
           onSelectDraftDetector={setSelectedDraftDetector}
         />
-        <PaintToolbar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          layers={layers}
-          activeLayerId={activeLayerId}
-          onSetActiveLayer={setActiveLayerId}
-          onAddLayer={addLayer}
-          onToggleLayer={toggleLayer}
-          onClearActiveLayer={clearActiveLayer}
-        />
+        <div className="pointer-events-none absolute right-2 top-12 z-20">
+          <div className="pointer-events-auto">
+            <PaintToolbar
+              activeTool={activeTool}
+              onSelectTool={setActiveTool}
+              layers={layers}
+              activeLayerId={activeLayerId}
+              onSetActiveLayer={setActiveLayerId}
+              onAddLayer={addLayer}
+              onToggleLayer={toggleLayer}
+              onClearActiveLayer={clearActiveLayer}
+            />
+          </div>
+        </div>
       </div>
 
-      <section className="rounded-lg border bg-card p-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Detektor-status</h2>
-          <span className="text-xs text-muted-foreground">
-            {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et detektor-punkt"}
-          </span>
-        </div>
-        {selectedDraftDetectorItem ? (
-          <div className="mt-3 grid gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={toChecklist(selectedDraftDetectorItem.item.checklist).baseMounted}
-                onChange={(e) => updateSelectedDetectorChecklist({ baseMounted: e.target.checked })}
-              />
-              Sokkel montert
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={toChecklist(selectedDraftDetectorItem.item.checklist).detectorMounted}
-                onChange={(e) => updateSelectedDetectorChecklist({ detectorMounted: e.target.checked })}
-              />
-              Detektor montert
-            </label>
-            <div className="space-y-1">
-              <p className="text-xs font-medium">Kappe</p>
-              <div className="flex gap-3 text-sm">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    name="capOn"
-                    checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "yes"}
-                    onChange={() => updateSelectedDetectorChecklist({ capOn: "yes" })}
-                  />
-                  Ja
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    name="capOn"
-                    checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "no"}
-                    onChange={() => updateSelectedDetectorChecklist({ capOn: "no" })}
-                  />
-                  Nei
-                </label>
-                <button
-                  type="button"
-                  onClick={() => updateSelectedDetectorChecklist({ capOn: null })}
-                  className="rounded border border-input px-1.5 text-xs hover:bg-muted"
-                >
-                  Nullstill
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Kommentar</label>
-              <textarea
-                value={toChecklist(selectedDraftDetectorItem.item.checklist).comment}
-                onChange={(e) => updateSelectedDetectorChecklist({ comment: e.target.value })}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-                placeholder="F.eks. Mangler strøm, følger opp i morgen..."
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Bildevedlegg</label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
-                  Ta bilde
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => {
-                      void onAttachPhoto(e.target.files?.[0] ?? null);
-                      e.currentTarget.value = "";
-                    }}
-                    className="hidden"
-                  />
-                </label>
-                <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
-                  Velg fil
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      void onAttachPhoto(e.target.files?.[0] ?? null);
-                      e.currentTarget.value = "";
-                    }}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Mobil: «Ta bilde» åpner kamera direkte. Fungerer for både felt og kontor.
-              </p>
-              {toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ? (
-                <img
-                  src={toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ?? ""}
-                  alt="Vedlegg"
-                  className="mt-1 h-24 rounded border object-cover"
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">Ingen vedlegg ennå.</p>
-              )}
-              {draftError ? <p className="text-xs text-destructive">{draftError}</p> : null}
-            </div>
+      <aside className="space-y-3 lg:max-h-[calc(100vh-9.5rem)] lg:overflow-auto">
+        <section className="rounded-lg border bg-card p-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Detektor-status</h2>
+            <span className="text-xs text-muted-foreground">
+              {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et detektor-punkt"}
+            </span>
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Klikk på et detektor-punkt i tegningen for å redigere status-checklist.
-          </p>
-        )}
-      </section>
+          {selectedDraftDetectorItem ? (
+            <div className="mt-3 grid gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={toChecklist(selectedDraftDetectorItem.item.checklist).baseMounted}
+                  onChange={(e) => updateSelectedDetectorChecklist({ baseMounted: e.target.checked })}
+                />
+                Sokkel montert
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={toChecklist(selectedDraftDetectorItem.item.checklist).detectorMounted}
+                  onChange={(e) => updateSelectedDetectorChecklist({ detectorMounted: e.target.checked })}
+                />
+                Detektor montert
+              </label>
+              <div className="space-y-1">
+                <p className="text-xs font-medium">Kappe</p>
+                <div className="flex gap-3 text-sm">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="capOn"
+                      checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "yes"}
+                      onChange={() => updateSelectedDetectorChecklist({ capOn: "yes" })}
+                    />
+                    Ja
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="capOn"
+                      checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "no"}
+                      onChange={() => updateSelectedDetectorChecklist({ capOn: "no" })}
+                    />
+                    Nei
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => updateSelectedDetectorChecklist({ capOn: null })}
+                    className="rounded border border-input px-1.5 text-xs hover:bg-muted"
+                  >
+                    Nullstill
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Kommentar</label>
+                <textarea
+                  value={toChecklist(selectedDraftDetectorItem.item.checklist).comment}
+                  onChange={(e) => updateSelectedDetectorChecklist({ comment: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  placeholder="F.eks. Mangler strøm, følger opp i morgen..."
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Bildevedlegg</label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                    Ta bilde
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => {
+                        void onAttachPhoto(e.target.files?.[0] ?? null);
+                        e.currentTarget.value = "";
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                    Velg fil
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        void onAttachPhoto(e.target.files?.[0] ?? null);
+                        e.currentTarget.value = "";
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Mobil: «Ta bilde» åpner kamera direkte. Fungerer for både felt og kontor.
+                </p>
+                {toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ? (
+                  <img
+                    src={toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ?? ""}
+                    alt="Vedlegg"
+                    className="mt-1 h-24 rounded border object-cover"
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Ingen vedlegg ennå.</p>
+                )}
+                {toChecklist(selectedDraftDetectorItem.item.checklist).photoPath ? (
+                  <p className="text-[11px] text-muted-foreground">Lagringssti settes ved publisering.</p>
+                ) : null}
+                {draftError ? <p className="text-xs text-destructive">{draftError}</p> : null}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Klikk på et detektor-punkt i tegningen for å redigere status-checklist.
+            </p>
+          )}
+        </section>
 
-      <section className="rounded-lg border bg-card p-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Utkast på bruker</h2>
-          <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Utkast lagres lokalt på bruker. Publiser hvert element med synlighet (default: alle).
-        </p>
-        {publishError ? (
-          <p className="mt-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-            {publishError}
+        <section className="rounded-lg border bg-card p-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Utkast på bruker</h2>
+            <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Utkast lagres lokalt på bruker. Publiser hvert element med synlighet (default: alle).
           </p>
-        ) : null}
-        {draftRows.length === 0 ? (
-          <p className="mt-3 text-xs text-muted-foreground">Ingen lokale utkast ennå.</p>
-        ) : (
-          <ul className="mt-3 space-y-1.5">
-            {draftRows.map((row) => (
-              <li key={row.localKey} className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-1.5">
-                <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[11px]">
-                  {row.item.type}
-                </span>
-                <span className="text-[11px] text-muted-foreground">{row.layerName}</span>
-                <select
-                  value={visibilityMap[row.localKey] ?? "all"}
-                  onChange={(e) =>
-                    setVisibilityMap((prev) => ({ ...prev, [row.localKey]: e.target.value as OverlayVisibility }))
-                  }
-                  className="h-7 rounded border border-input bg-background px-2 text-[11px]"
-                >
-                  <option value="all">Synlig: alle</option>
-                  <option value="admins">Synlig: kun admin</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => publishOne(row)}
-                  className="rounded border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
-                >
-                  Publiser
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {publishError ? (
+            <p className="mt-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+              {publishError}
+            </p>
+          ) : null}
+          {draftRows.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">Ingen lokale utkast ennå.</p>
+          ) : (
+            <ul className="mt-3 space-y-1.5">
+              {draftRows.map((row) => (
+                <li key={row.localKey} className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-1.5">
+                  <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[11px]">
+                    {row.item.type}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{row.layerName}</span>
+                  <select
+                    value={visibilityMap[row.localKey] ?? "all"}
+                    onChange={(e) =>
+                      setVisibilityMap((prev) => ({ ...prev, [row.localKey]: e.target.value as OverlayVisibility }))
+                    }
+                    className="h-7 rounded border border-input bg-background px-2 text-[11px]"
+                  >
+                    <option value="all">Synlig: alle</option>
+                    <option value="admins">Synlig: kun admin</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => publishOne(row)}
+                    className="rounded border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    Publiser
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </aside>
     </div>
   );
 }
