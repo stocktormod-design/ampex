@@ -37,6 +37,7 @@ type Props = {
   onAddLayer: () => void;
   onToggleLayer: (layerId: string) => void;
   onClearActiveLayer: () => void;
+  mobile?: boolean;
 };
 
 export function PaintToolbar({
@@ -48,8 +49,69 @@ export function PaintToolbar({
   onAddLayer,
   onToggleLayer,
   onClearActiveLayer,
+  mobile = false,
 }: Props) {
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
+  if (mobile) {
+    return (
+      <aside className="rounded-lg border bg-card/95 px-2 py-2 shadow-sm backdrop-blur">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {TOOLS.map((tool) => {
+            const Icon = ICONS[tool.id];
+            return (
+              <button
+                key={tool.id}
+                type="button"
+                title={`${tool.label} — ${tool.hint}`}
+                onClick={() => onSelectTool(tool.id)}
+                className={`flex h-9 min-w-9 items-center justify-center rounded-md border transition-colors ${
+                  activeTool === tool.id
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-4" aria-hidden />
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={onAddLayer}
+            title="Nytt lag"
+            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-input bg-background hover:bg-muted"
+          >
+            <Plus className="size-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            title="Vis/skjul aktivt lag"
+            onClick={() => {
+              if (!activeLayerId) return;
+              onToggleLayer(activeLayerId);
+            }}
+            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-input bg-background hover:bg-muted"
+          >
+            {(layers.find((l) => l.id === activeLayerId)?.visible ?? true) ? (
+              <Eye className="size-4" aria-hidden />
+            ) : (
+              <EyeOff className="size-4" aria-hidden />
+            )}
+          </button>
+          <button
+            type="button"
+            title="Tøm aktivt lag"
+            onClick={onClearActiveLayer}
+            className="rounded-md border border-destructive/40 bg-background px-2 py-2 text-xs text-destructive hover:bg-destructive/10"
+          >
+            Tøm
+          </button>
+        </div>
+        <p className="truncate text-[11px] text-muted-foreground">
+          Aktivt verktøy: {current.label} · Lag: {layers.find((l) => l.id === activeLayerId)?.name ?? "—"}
+        </p>
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-full max-w-[4.25rem] shrink-0 rounded-lg border bg-card/95 shadow-sm backdrop-blur">

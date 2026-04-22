@@ -116,14 +116,6 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     );
   });
 
-  const signedUrlPairs = await Promise.all(
-    visibleRows.map(async (row) => {
-      const { data } = await supabase.storage.from("drawings").createSignedUrl(row.file_path, 60 * 30);
-      return [row.id, data?.signedUrl ?? null] as const;
-    }),
-  );
-  const signedUrlMap = new Map<string, string | null>(signedUrlPairs);
-
   const uploadAction = uploadDrawingPdf.bind(null, project.id);
 
   return (
@@ -251,19 +243,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {signedUrlMap.get(row.id) ? (
-                          <a
-                            href={signedUrlMap.get(row.id) ?? "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
-                          >
-                            <FileText className="size-3.5" aria-hidden />
-                            Åpne fil
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Kunne ikke lage visningslenke</span>
-                        )}
+                        <Link
+                          href={`/dashboard/projects/${project.id}/drawings/${row.id}/view`}
+                          className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                        >
+                          <FileText className="size-3.5" aria-hidden />
+                          Vis i nettsiden
+                        </Link>
                         <Link
                           href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
                           className="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"

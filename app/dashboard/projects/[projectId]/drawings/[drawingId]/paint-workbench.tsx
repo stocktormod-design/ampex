@@ -78,6 +78,7 @@ export function PaintWorkbench({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<"status" | "drafts">("status");
   const [pending, startTransition] = useTransition();
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
@@ -306,7 +307,7 @@ export function PaintWorkbench({
 
   return (
     <div className="grid gap-3 lg:grid-cols-[1fr_22rem]">
-      <div className="relative h-[calc(100vh-9.5rem)] min-h-[620px] overflow-hidden rounded-lg border bg-background">
+      <div className="relative h-[calc(100dvh-11rem)] min-h-[420px] overflow-hidden rounded-lg border bg-background sm:h-[calc(100dvh-9.5rem)] lg:min-h-[620px]">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}
@@ -319,7 +320,7 @@ export function PaintWorkbench({
           selectedDraftDetector={selectedDraftDetector}
           onSelectDraftDetector={setSelectedDraftDetector}
         />
-        <div className="pointer-events-none absolute right-2 top-12 z-20">
+        <div className="pointer-events-none absolute right-2 top-12 z-20 hidden sm:block">
           <div className="pointer-events-auto">
             <PaintToolbar
               activeTool={activeTool}
@@ -335,8 +336,43 @@ export function PaintWorkbench({
         </div>
       </div>
 
-      <aside className="space-y-3 lg:max-h-[calc(100vh-9.5rem)] lg:overflow-auto">
-        <section className="rounded-lg border bg-card p-3">
+      <div className="sm:hidden">
+        <PaintToolbar
+          mobile
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          layers={layers}
+          activeLayerId={activeLayerId}
+          onSetActiveLayer={setActiveLayerId}
+          onAddLayer={addLayer}
+          onToggleLayer={toggleLayer}
+          onClearActiveLayer={clearActiveLayer}
+        />
+      </div>
+
+      <aside className="space-y-3 lg:max-h-[calc(100dvh-9.5rem)] lg:overflow-auto">
+        <div className="grid grid-cols-2 gap-2 rounded-lg border bg-card p-1 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setMobilePanel("status")}
+            className={`rounded-md px-2 py-1.5 text-xs font-medium ${
+              mobilePanel === "status" ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Status
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePanel("drafts")}
+            className={`rounded-md px-2 py-1.5 text-xs font-medium ${
+              mobilePanel === "drafts" ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Utkast
+          </button>
+        </div>
+
+        <section className={`rounded-lg border bg-card p-3 ${mobilePanel === "drafts" ? "hidden sm:block" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Detektor-status</h2>
             <span className="text-xs text-muted-foreground">
@@ -455,7 +491,7 @@ export function PaintWorkbench({
           )}
         </section>
 
-        <section className="rounded-lg border bg-card p-3">
+        <section className={`rounded-lg border bg-card p-3 ${mobilePanel === "status" ? "hidden sm:block" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Utkast på bruker</h2>
             <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>

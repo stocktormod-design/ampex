@@ -291,45 +291,45 @@ export function PaintCanvas({
 
   return (
     <section className="flex min-h-[72vh] min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b bg-background px-4 py-2">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2 sm:px-4">
+        <div className="min-w-0 max-w-full">
           <p className="truncate text-sm font-medium">{drawingName}</p>
-          <p className="truncate text-xs text-muted-foreground">{filePath}</p>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">{filePath}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
           >
             −
           </button>
-          <span className="w-14 text-center text-xs tabular-nums">{Math.round(zoom * 100)}%</span>
+          <span className="w-12 text-center text-[11px] tabular-nums sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
           >
             +
           </button>
           <button
             type="button"
             onClick={() => setZoom(1)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
           >
             Reset
           </button>
           <button
             type="button"
             onClick={() => setZoom(fitZoom)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px] hover:bg-muted sm:text-xs"
           >
             Fit
           </button>
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-4">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-2 sm:p-4">
         <div className="mx-auto w-fit">
           <div
             className="relative overflow-hidden rounded-md border bg-white shadow-sm"
