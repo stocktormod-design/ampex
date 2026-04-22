@@ -540,13 +540,15 @@ export function PaintCanvas({
     setManualZoom((prev) => clampZoom(Math.max(prev, zoom) - ZOOM_STEP));
   }
 
-  function resetZoom() {
-    setZoomMode("manual");
-    setManualZoom(1);
-  }
-
   function fitToViewport() {
     setZoomMode("fit");
+    setPanOffset({ x: 0, y: 0 });
+  }
+
+  function resetView() {
+    setZoomMode("manual");
+    setManualZoom(1.5);
+    setPanOffset({ x: 0, y: 0 });
   }
 
   return (
@@ -560,41 +562,51 @@ export function PaintCanvas({
           <button
             type="button"
             onClick={decreaseZoom}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            title="Zoom ut"
           >
             −
           </button>
-          <span className="w-14 text-center text-[11px] tabular-nums sm:text-xs">{Math.round(zoom * 100)}%</span>
+          <span className="w-14 text-center text-[11px] font-medium tabular-nums sm:text-xs">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
             onClick={increaseZoom}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            title="Zoom inn"
           >
             +
           </button>
           <button
             type="button"
-            onClick={resetZoom}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700 sm:text-xs"
+            onClick={resetView}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            title="Tilbakestill visning (1.5x)"
           >
-            Reset
+            ⌖
           </button>
           <button
             type="button"
             onClick={fitToViewport}
-            className={`rounded-md border px-2 py-1 text-[11px] sm:text-xs ${
+            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium sm:text-xs ${
               zoomMode === "fit"
                 ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
                 : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
             }`}
+            title="Tilpass vindu"
           >
             Fit
           </button>
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-zinc-800 p-0 sm:p-4">
-        <div className="mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center">
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-0 sm:p-4">
+        <div 
+          className="relative mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center"
+          style={{ 
+            minWidth: `${Math.round(stageW * zoom + Math.abs(panOffset.x) * 2)}px`,
+            minHeight: `${Math.round(stageH * zoom + Math.abs(panOffset.y) * 2)}px`
+          }}
+        >
           <div
             className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
             style={{
