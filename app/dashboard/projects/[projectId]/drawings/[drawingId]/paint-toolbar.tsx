@@ -54,8 +54,8 @@ export function PaintToolbar({
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
   if (mobile) {
     return (
-      <aside className="rounded-lg border bg-card px-2 py-2 shadow-sm">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+      <aside className="w-[3.25rem] rounded-xl border border-zinc-700/70 bg-zinc-900/95 text-zinc-100 shadow-xl backdrop-blur">
+        <div className="space-y-1 p-1.5">
           {TOOLS.map((tool) => {
             const Icon = ICONS[tool.id];
             return (
@@ -64,21 +64,22 @@ export function PaintToolbar({
                 type="button"
                 title={`${tool.label} — ${tool.hint}`}
                 onClick={() => onSelectTool(tool.id)}
-                className={`flex h-9 min-w-9 items-center justify-center rounded-md border transition-colors ${
+                className={`flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
                   activeTool === tool.id
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
                 }`}
               >
                 <Icon className="size-4" aria-hidden />
               </button>
             );
           })}
+          <div className="my-1 h-px bg-zinc-700" />
           <button
             type="button"
             onClick={onAddLayer}
             title="Nytt lag"
-            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-input bg-background hover:bg-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 hover:bg-zinc-700"
           >
             <Plus className="size-4" aria-hidden />
           </button>
@@ -89,7 +90,7 @@ export function PaintToolbar({
               if (!activeLayerId) return;
               onToggleLayer(activeLayerId);
             }}
-            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-input bg-background hover:bg-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 hover:bg-zinc-700"
           >
             {(layers.find((l) => l.id === activeLayerId)?.visible ?? true) ? (
               <Eye className="size-4" aria-hidden />
@@ -101,14 +102,11 @@ export function PaintToolbar({
             type="button"
             title="Tøm aktivt lag"
             onClick={onClearActiveLayer}
-            className="rounded-md border border-destructive/40 bg-background px-2 py-2 text-xs text-destructive hover:bg-destructive/10"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-red-500/50 bg-zinc-900 text-red-300 hover:bg-red-500/10"
           >
-            Tøm
+            <Eraser className="size-4" aria-hidden />
           </button>
         </div>
-        <p className="truncate text-[11px] text-muted-foreground">
-          Aktivt verktøy: {current.label} · Lag: {layers.find((l) => l.id === activeLayerId)?.name ?? "—"}
-        </p>
       </aside>
     );
   }

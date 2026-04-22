@@ -14,6 +14,7 @@ const MAX_STAGE_H = 1600;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.1;
+type Bounds = { x: number; y: number; w: number; h: number };
 
 function fileExt(path: string): string {
   const lower = path.toLowerCase();
@@ -23,6 +24,40 @@ function fileExt(path: string): string {
 
 function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(3))));
+}
+
+function detectContentBounds(canvas: HTMLCanvasElement): Bounds | null {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+      const isNotWhite = a > 0 && (r < 245 || g < 245 || b < 245);
+      if (!isNotWhite) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  if (w < 40 || h < 40) return null;
+  return { x: minX, y: minY, w, h };
 }
 
 export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
@@ -58,18 +93,39 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
         const pdf = await task.promise;
         const page = await pdf.getPage(1);
 
-        const baseViewport = page.getViewport({ scale: 1 });
         const renderViewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(renderViewport.width);
-        canvas.height = Math.ceil(renderViewport.height);
-        const ctx = canvas.getContext("2d");
+        const renderCanvas = document.createElement("canvas");
+        renderCanvas.width = Math.ceil(renderViewport.width);
+        renderCanvas.height = Math.ceil(renderViewport.height);
+        const ctx = renderCanvas.getContext("2d");
         if (!ctx) {
           throw new Error("Kunne ikke initialisere PDF-canvas");
         }
 
         await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+        const bounds = detectContentBounds(renderCanvas);
+        const sourceBounds = bounds ?? { x: 0, y: 0, w: renderCanvas.width, h: renderCanvas.height };
+
+        const croppedCanvas = document.createElement("canvas");
+        croppedCanvas.width = sourceBounds.w;
+        croppedCanvas.height = sourceBounds.h;
+        const croppedCtx = croppedCanvas.getContext("2d");
+        if (!croppedCtx) {
+          throw new Error("Kunne ikke beskjære PDF");
+        }
+        croppedCtx.drawImage(
+          renderCanvas,
+          sourceBounds.x,
+          sourceBounds.y,
+          sourceBounds.w,
+          sourceBounds.h,
+          0,
+          0,
+          sourceBounds.w,
+          sourceBounds.h,
+        );
+
+        const blob = await new Promise<Blob | null>((resolve) => croppedCanvas.toBlob(resolve, "image/png"));
         if (!blob) {
           throw new Error("Kunne ikke konvertere PDF");
         }
@@ -81,8 +137,8 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
         }
 
         setPdfPreviewUrl(objectUrl);
-        const w = Math.max(400, Math.min(MAX_STAGE_W, Math.round(baseViewport.width)));
-        const h = Math.max(300, Math.min(MAX_STAGE_H, Math.round(baseViewport.height)));
+        const w = Math.max(320, Math.min(MAX_STAGE_W, Math.round(sourceBounds.w / 2)));
+        const h = Math.max(220, Math.min(MAX_STAGE_H, Math.round(sourceBounds.h / 2)));
         setStageSize({ w, h });
       } catch {
         if (cancelled) return;

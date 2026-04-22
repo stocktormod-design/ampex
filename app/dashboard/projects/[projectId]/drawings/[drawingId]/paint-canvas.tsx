@@ -34,8 +34,44 @@ type DraftShape =
   | { type: "rect"; x: number; y: number; w: number; h: number }
   | null;
 
+type Bounds = { x: number; y: number; w: number; h: number };
+
 function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value.toFixed(3))));
+}
+
+function detectContentBounds(canvas: HTMLCanvasElement): Bounds | null {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+      const isNotWhite = a > 0 && (r < 245 || g < 245 || b < 245);
+      if (!isNotWhite) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  if (w < 40 || h < 40) return null;
+  return { x: minX, y: minY, w, h };
 }
 
 function normalizeRect(x1: number, y1: number, x2: number, y2: number) {
@@ -112,6 +148,7 @@ export function PaintCanvas({
   const [manualZoom, setManualZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
+  const [docOffset, setDocOffset] = useState({ x: 0, y: 0 });
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftShape>(null);
@@ -150,16 +187,38 @@ export function PaintCanvas({
 
         const baseViewport = page.getViewport({ scale: 1 });
         const renderViewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(renderViewport.width);
-        canvas.height = Math.ceil(renderViewport.height);
-        const ctx = canvas.getContext("2d");
+        const renderCanvas = document.createElement("canvas");
+        renderCanvas.width = Math.ceil(renderViewport.width);
+        renderCanvas.height = Math.ceil(renderViewport.height);
+        const ctx = renderCanvas.getContext("2d");
         if (!ctx) {
           throw new Error("Kunne ikke initialisere PDF-canvas");
         }
 
         await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+        const bounds = detectContentBounds(renderCanvas);
+        const sourceBounds = bounds ?? { x: 0, y: 0, w: renderCanvas.width, h: renderCanvas.height };
+
+        const croppedCanvas = document.createElement("canvas");
+        croppedCanvas.width = sourceBounds.w;
+        croppedCanvas.height = sourceBounds.h;
+        const croppedCtx = croppedCanvas.getContext("2d");
+        if (!croppedCtx) {
+          throw new Error("Kunne ikke beskjære PDF");
+        }
+        croppedCtx.drawImage(
+          renderCanvas,
+          sourceBounds.x,
+          sourceBounds.y,
+          sourceBounds.w,
+          sourceBounds.h,
+          0,
+          0,
+          sourceBounds.w,
+          sourceBounds.h,
+        );
+
+        const blob = await new Promise<Blob | null>((resolve) => croppedCanvas.toBlob(resolve, "image/png"));
         if (!blob) {
           throw new Error("Kunne ikke konvertere PDF");
         }
@@ -171,13 +230,15 @@ export function PaintCanvas({
         }
 
         setPdfPreviewUrl(objectUrl);
-        const w = Math.max(400, Math.min(MAX_STAGE_W, Math.round(baseViewport.width)));
-        const h = Math.max(300, Math.min(MAX_STAGE_H, Math.round(baseViewport.height)));
+        const w = Math.max(320, Math.min(MAX_STAGE_W, Math.round(sourceBounds.w / 2)));
+        const h = Math.max(220, Math.min(MAX_STAGE_H, Math.round(sourceBounds.h / 2)));
         setStageSize({ w, h });
+        setDocOffset({ x: sourceBounds.x / 2, y: sourceBounds.y / 2 });
       } catch {
         if (cancelled) return;
         setPdfLoadError("Kunne ikke vise PDF i nettleseren.");
         setStageSize(DEFAULT_STAGE);
+        setDocOffset({ x: 0, y: 0 });
       }
     }
 
@@ -186,6 +247,7 @@ export function PaintCanvas({
     } else {
       setPdfPreviewUrl(null);
       setPdfLoadError(null);
+      setDocOffset({ x: 0, y: 0 });
       const image = new Image();
       image.onload = () => {
         if (cancelled) return;
@@ -237,6 +299,26 @@ export function PaintCanvas({
     };
   }
 
+  function toDocPoint(pt: { x: number; y: number }) {
+    return { x: pt.x + docOffset.x, y: pt.y + docOffset.y };
+  }
+
+  function toDisplayItem(item: OverlayItem): OverlayItem {
+    if (docOffset.x === 0 && docOffset.y === 0) return item;
+    if (item.type === "detector") return { ...item, x: item.x - docOffset.x, y: item.y - docOffset.y };
+    if (item.type === "line") {
+      return {
+        ...item,
+        x1: item.x1 - docOffset.x,
+        y1: item.y1 - docOffset.y,
+        x2: item.x2 - docOffset.x,
+        y2: item.y2 - docOffset.y,
+      };
+    }
+    if (item.type === "rect") return { ...item, x: item.x - docOffset.x, y: item.y - docOffset.y };
+    return { ...item, x: item.x - docOffset.x, y: item.y - docOffset.y };
+  }
+
   function addToActive(item: OverlayItem) {
     if (!activeLayer) return;
     onUpdateLayers((prev) =>
@@ -251,8 +333,10 @@ export function PaintCanvas({
       for (let i = layer.items.length - 1; i >= 0; i -= 1) {
         const item = layer.items[i];
         if (item.type !== "detector") continue;
-        const dx = item.x - x;
-        const dy = item.y - y;
+        const displayX = item.x - docOffset.x;
+        const displayY = item.y - docOffset.y;
+        const dx = displayX - x;
+        const dy = displayY - y;
         if (Math.hypot(dx, dy) <= hitRadius) {
           return { layerId: layer.id, itemId: item.id };
         }
@@ -280,22 +364,24 @@ export function PaintCanvas({
     for (const layer of allLayers) {
       if (!layer.visible) continue;
       for (const item of layer.items) {
+        const displayItem = toDisplayItem(item);
         const isSelected =
           item.type === "detector" &&
           selectedDraftDetector?.layerId === layer.id &&
           selectedDraftDetector?.itemId === item.id;
-        drawItem(ctx, item, layer.color, Boolean(isSelected));
+        drawItem(ctx, displayItem, layer.color, Boolean(isSelected));
       }
     }
 
     if (draft && activeLayer) {
-      drawItem(ctx, draft as OverlayItem, activeLayer.color, false);
+      drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false);
     }
-  }, [allLayers, draft, activeLayer, selectedDraftDetector, stageW, stageH]);
+  }, [allLayers, draft, activeLayer, selectedDraftDetector, stageW, stageH, docOffset.x, docOffset.y]);
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!activeLayer) return;
     const pt = pointerToStage(e);
+    const docPt = toDocPoint(pt);
     const hitDetector = findDraftDetectorAt(pt.x, pt.y);
     if (hitDetector) {
       onSelectDraftDetector(hitDetector);
@@ -307,8 +393,8 @@ export function PaintCanvas({
       addToActive({
         id: crypto.randomUUID(),
         type: "detector",
-        x: pt.x,
-        y: pt.y,
+        x: docPt.x,
+        y: docPt.y,
         checklist: {
           baseMounted: false,
           detectorMounted: false,
@@ -321,7 +407,7 @@ export function PaintCanvas({
       return;
     }
     if (activeTool === "text") {
-      addToActive({ id: crypto.randomUUID(), type: "text", x: pt.x, y: pt.y, text: "Tekst" });
+      addToActive({ id: crypto.randomUUID(), type: "text", x: docPt.x, y: docPt.y, text: "Tekst" });
       return;
     }
     if (activeTool === "erase") {
@@ -329,35 +415,35 @@ export function PaintCanvas({
       return;
     }
     if (activeTool === "line" || activeTool === "rect") {
-      setDragStart(pt);
+      setDragStart(docPt);
       if (activeTool === "line") {
-        setDraft({ type: "line", x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y });
+        setDraft({ type: "line", x1: docPt.x, y1: docPt.y, x2: docPt.x, y2: docPt.y });
       } else {
-        setDraft({ type: "rect", x: pt.x, y: pt.y, w: 0, h: 0 });
+        setDraft({ type: "rect", x: docPt.x, y: docPt.y, w: 0, h: 0 });
       }
     }
   }
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
     if (!dragStart) return;
-    const pt = pointerToStage(e);
+    const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
-      setDraft({ type: "line", x1: dragStart.x, y1: dragStart.y, x2: pt.x, y2: pt.y });
+      setDraft({ type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y });
       return;
     }
     if (activeTool === "rect") {
-      const rect = normalizeRect(dragStart.x, dragStart.y, pt.x, pt.y);
+      const rect = normalizeRect(dragStart.x, dragStart.y, docPt.x, docPt.y);
       setDraft({ type: "rect", ...rect });
     }
   }
 
   function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
     if (!dragStart) return;
-    const pt = pointerToStage(e);
+    const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
-      addToActive({ id: crypto.randomUUID(), type: "line", x1: dragStart.x, y1: dragStart.y, x2: pt.x, y2: pt.y });
+      addToActive({ id: crypto.randomUUID(), type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y });
     } else if (activeTool === "rect") {
-      const rect = normalizeRect(dragStart.x, dragStart.y, pt.x, pt.y);
+      const rect = normalizeRect(dragStart.x, dragStart.y, docPt.x, docPt.y);
       addToActive({ id: crypto.randomUUID(), type: "rect", ...rect });
     }
     setDragStart(null);

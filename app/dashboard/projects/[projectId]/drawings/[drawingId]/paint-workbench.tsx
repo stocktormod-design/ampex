@@ -335,7 +335,8 @@ export function PaintWorkbench({
             />
           </div>
         </div>
-        <div className="absolute bottom-2 left-2 right-2 z-20 sm:hidden">
+        <div className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 sm:hidden">
+          <div className="pointer-events-auto">
           <PaintToolbar
             mobile
             activeTool={activeTool}
@@ -347,6 +348,7 @@ export function PaintWorkbench({
             onToggleLayer={toggleLayer}
             onClearActiveLayer={clearActiveLayer}
           />
+          </div>
         </div>
         <button
           type="button"
