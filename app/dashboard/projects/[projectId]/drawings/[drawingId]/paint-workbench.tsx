@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { publishOverlayItem } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
@@ -122,6 +122,7 @@ export function PaintWorkbench({
   const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const prevDetectorTapRef = useRef<{ layerId: string; itemId: string; at: number } | null>(null);
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
 
@@ -180,8 +181,20 @@ export function PaintWorkbench({
 
   useEffect(() => {
     if (!selectedDraftDetector) return;
-    setActiveTab("status");
-    setPanelOpen(true);
+    const now = Date.now();
+    const prev = prevDetectorTapRef.current;
+    const isDoubleTap =
+      prev &&
+      prev.layerId === selectedDraftDetector.layerId &&
+      prev.itemId === selectedDraftDetector.itemId &&
+      now - prev.at < 380;
+    if (isDoubleTap) {
+      setActiveTab("status");
+      setPanelOpen(true);
+      prevDetectorTapRef.current = null;
+      return;
+    }
+    prevDetectorTapRef.current = { ...selectedDraftDetector, at: now };
   }, [selectedDraftDetector]);
 
   function addLayer() {
@@ -403,14 +416,14 @@ export function PaintWorkbench({
       </div>
 
       {/* Backdrop */}
-      {panelOpen && (
+      {panelOpen ? (
         <button
           type="button"
           aria-label="Lukk sidepanel"
           onClick={() => setPanelOpen(false)}
-          className="absolute inset-0 z-30 bg-black/70"
+          className="absolute inset-0 z-30 bg-transparent"
         />
-      )}
+      ) : null}
 
       {/* Slide-in side panel */}
       <aside
@@ -490,6 +503,27 @@ export function PaintWorkbench({
                 <span className="text-xs text-zinc-600">
                   {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et punkt"}
                 </span>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Lag</p>
+                <div className="flex flex-wrap gap-2">
+                  {layers.map((layer) => (
+                    <button
+                      key={layer.id}
+                      type="button"
+                      onClick={() => setActiveLayerId(layer.id)}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                        activeLayerId === layer.id
+                          ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
+                          : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: layer.color }} />
+                      {layer.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {checklist && selectedDraftDetectorItem ? (

@@ -136,20 +136,25 @@ function drawItem(
   ctx.lineWidth = 2;
 
   if (item.type === "detector") {
+    // Green when cap is confirmed off (detector is operational)
+    const fillColor = item.checklist?.capOn === "no" ? "#22c55e" : color;
     if (isSelectedDetector) {
       ctx.beginPath();
       ctx.arc(item.x, item.y, 13, 0, Math.PI * 2);
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2.5;
       ctx.stroke();
-      ctx.strokeStyle = color;
       ctx.lineWidth = 2;
     }
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = fillColor;
     ctx.beginPath();
     ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 1.5;
     ctx.stroke();
+    ctx.lineWidth = 2;
     if (item.label) {
       ctx.fillStyle = "#111827";
       ctx.font = "12px sans-serif";
@@ -192,15 +197,14 @@ export function PaintCanvas({
   panelOpen,
   onTogglePanel,
 }: Props) {
-  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("manual");
-  const [manualZoom, setManualZoom] = useState(1.5);
+  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
+  const [manualZoom, setManualZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [stageSize, setStageSize] = useState(DEFAULT_STAGE);
   const [docOffset, setDocOffset] = useState({ x: 0, y: 0 });
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftShape>(null);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [touchStart, setTouchStart] = useState<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
@@ -218,6 +222,7 @@ export function PaintCanvas({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const touchPanStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchTapStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const initializedFitRef = useRef(false);
   const canvasCursor = isPanning ? "cursor-grabbing" : activeTool === "select" || dragLineHandle ? "cursor-grab" : "cursor-crosshair";
 
@@ -333,11 +338,9 @@ export function PaintCanvas({
     if (initializedFitRef.current) return;
     const view = viewportRef.current;
     if (!view || fitZoom <= 0) return;
-    if (view.clientWidth < 640) {
-      setZoomMode("fit");
-      setManualZoom(fitZoom);
-      setPanOffset({ x: 0, y: 0 });
-    }
+    setZoomMode("fit");
+    setManualZoom(fitZoom);
+    setPanOffset({ x: 0, y: 0 });
     initializedFitRef.current = true;
   }, [fitZoom]);
 
@@ -346,12 +349,11 @@ export function PaintCanvas({
     if (!view) return;
 
     const updateFit = () => {
-      const isMobileViewport = view.clientWidth < 640;
-      const horizontalPadding = isMobileViewport ? 0 : 32;
-      const verticalPadding = isMobileViewport ? 0 : 32;
+      const horizontalPadding = 0;
+      const verticalPadding = 0;
       const vw = Math.max(220, view.clientWidth - horizontalPadding);
       const vh = Math.max(180, view.clientHeight - verticalPadding);
-      const fit = isMobileViewport ? Math.max(vw / stageW, vh / stageH) : Math.min(vw / stageW, vh / stageH);
+      const fit = Math.min(vw / stageW, vh / stageH);
       const clamped = clampZoom(fit);
       setFitZoom(clamped);
     };
@@ -707,7 +709,7 @@ export function PaintCanvas({
         selectItem(null);
       }
       setIsPanning(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
       return;
     }
 
@@ -748,7 +750,7 @@ export function PaintCanvas({
       return;
     }
     if (activeTool === "line" || activeTool === "rect") {
-      setDragStart(docPt);
+      dragStartRef.current = docPt;
       if (activeTool === "line") {
         setDraft({
           type: "line",
@@ -775,11 +777,12 @@ export function PaintCanvas({
       return;
     }
 
+    const dragStart = dragStartRef.current;
     if (isPanning && dragStart) {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
       setPanOffset((prev) => clampPan({ x: prev.x + dx, y: prev.y + dy }, zoom));
-      setDragStart({ x: e.clientX, y: e.clientY });
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
       return;
     }
 
@@ -808,10 +811,11 @@ export function PaintCanvas({
 
     if (isPanning) {
       setIsPanning(false);
-      setDragStart(null);
+      dragStartRef.current = null;
       return;
     }
 
+    const dragStart = dragStartRef.current;
     if (!activeLayer) return;
     if (!dragStart) return;
     const docPt = toDocPoint(pointerToStage(e));
@@ -840,7 +844,7 @@ export function PaintCanvas({
       addToActive(nextRect);
       selectItem({ layerId: activeLayer.id, itemId: nextRect.id });
     }
-    setDragStart(null);
+    dragStartRef.current = null;
     setDraft(null);
   }
 
@@ -859,9 +863,10 @@ export function PaintCanvas({
       setZoomMode("manual");
       touchTapStartRef.current = null;
       touchPanStartRef.current = null;
-      setDragStart(null);
+      dragStartRef.current = null;
       setDraft(null);
     } else if (e.touches.length === 1) {
+      e.preventDefault();
       const t = e.touches[0];
       const stagePt = touchToStage(t);
       if (!stagePt || !activeLayer) return;
@@ -875,7 +880,7 @@ export function PaintCanvas({
       }
 
       if (activeTool === "line") {
-        setDragStart(docPt);
+        dragStartRef.current = docPt;
         setDraft({
           type: "line",
           x1: docPt.x,
@@ -888,10 +893,10 @@ export function PaintCanvas({
           c2y: docPt.y,
         });
       } else if (activeTool === "rect") {
-        setDragStart(docPt);
+        dragStartRef.current = docPt;
         setDraft({ type: "rect", x: docPt.x, y: docPt.y, w: 0, h: 0 });
       } else {
-        setDragStart(null);
+        dragStartRef.current = null;
         setDraft(null);
       }
     }
@@ -915,6 +920,7 @@ export function PaintCanvas({
       const stagePt = touchToStage(t);
       if (!stagePt) return;
       const docPt = toDocPoint(stagePt);
+      const dragStart = dragStartRef.current;
 
       if (activeTool === "line" && dragStart) {
         e.preventDefault();
@@ -946,8 +952,8 @@ export function PaintCanvas({
       setTouchStart(null);
     }
     if (e.touches.length === 0) {
-      const startPoint = dragStart;
-      setDragStart(null);
+      const startPoint = dragStartRef.current;
+      dragStartRef.current = null;
       setIsPanning(false);
       const tapStart = touchTapStartRef.current;
       touchPanStartRef.current = null;
@@ -1052,10 +1058,7 @@ export function PaintCanvas({
   }
 
   function minAllowedZoom() {
-    const view = viewportRef.current;
-    if (!view) return MIN_ZOOM;
-    const isMobileViewport = view.clientWidth < 640;
-    return isMobileViewport ? Math.max(MIN_ZOOM, fitZoom) : MIN_ZOOM;
+    return Math.max(MIN_ZOOM, fitZoom);
   }
 
   function clampZoomForViewport(value: number) {
@@ -1206,7 +1209,7 @@ export function PaintCanvas({
       <div
         ref={viewportRef}
         onWheel={onWheel}
-        className="relative h-full w-full overflow-hidden bg-zinc-950"
+        className="relative h-full w-full touch-none overflow-hidden bg-zinc-950"
       >
         <div
           className="absolute left-1/2 top-1/2 overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
