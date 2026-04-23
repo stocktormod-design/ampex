@@ -308,8 +308,8 @@ export function PaintWorkbench({
   }
 
   return (
-    <div className="relative h-[calc(100dvh-3.8rem)]">
-      <div className="relative h-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
+    <div className="relative h-[calc(100dvh-3.8rem)] w-full">
+      <div className="relative h-full w-full overflow-hidden bg-zinc-900">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}

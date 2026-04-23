@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent, type WheelEvent } from "react";
 import type { OverlayItem, OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
@@ -92,6 +92,7 @@ type LinePoints = {
 };
 
 type LineHandle = "start" | "end" | "c1" | "c2";
+type ItemSelection = { layerId: string; itemId: string };
 
 function linePoints(item: Extract<OverlayItem, { type: "line" }>): LinePoints {
   const c1x = item.c1x ?? item.x1 + (item.x2 - item.x1) * 0.33;
@@ -199,7 +200,8 @@ export function PaintCanvas({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [touchStart, setTouchStart] = useState<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
-  const [selectedDraftLine, setSelectedDraftLine] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [selectedDraftItem, setSelectedDraftItem] = useState<ItemSelection | null>(null);
+  const [selectedDraftLine, setSelectedDraftLine] = useState<ItemSelection | null>(null);
   const [dragLineHandle, setDragLineHandle] = useState<{ layerId: string; itemId: string; handle: LineHandle } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ext = fileExt(filePath);
@@ -210,6 +212,8 @@ export function PaintCanvas({
   const stageH = stageSize.h;
   const zoom = zoomMode === "fit" ? fitZoom : manualZoom;
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const touchPanStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchTapStartRef = useRef<{ x: number; y: number } | null>(null);
   const canvasCursor = isPanning ? "cursor-grabbing" : activeTool === "select" || dragLineHandle ? "cursor-grab" : "cursor-crosshair";
 
   useEffect(() => {
@@ -339,6 +343,10 @@ export function PaintCanvas({
     return () => ro.disconnect();
   }, [stageW, stageH]);
 
+  useEffect(() => {
+    setPanOffset((prev) => clampPan(prev, zoom));
+  }, [zoom, stageW, stageH]);
+
   function pointerToStage(e: PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     return {
@@ -421,6 +429,70 @@ export function PaintCanvas({
     return null;
   }
 
+  function findDraftItemAt(x: number, y: number): ItemSelection | null {
+    const detectorHit = findDraftDetectorAt(x, y);
+    if (detectorHit) return detectorHit;
+
+    for (const layer of draftLayers) {
+      if (!layer.visible) continue;
+      for (let i = layer.items.length - 1; i >= 0; i -= 1) {
+        const item = layer.items[i];
+        if (item.type === "line") continue;
+        const display = toDisplayItem(item);
+        if (display.type === "rect") {
+          if (x >= display.x && x <= display.x + display.w && y >= display.y && y <= display.y + display.h) {
+            return { layerId: layer.id, itemId: item.id };
+          }
+        } else if (display.type === "text") {
+          const approxWidth = Math.max(40, display.text.length * 8);
+          const approxHeight = 18;
+          if (x >= display.x && x <= display.x + approxWidth && y >= display.y - approxHeight && y <= display.y + 4) {
+            return { layerId: layer.id, itemId: item.id };
+          }
+        }
+      }
+    }
+
+    return findDraftLineAt(x, y);
+  }
+
+  function selectItem(selection: ItemSelection | null) {
+    setSelectedDraftItem(selection);
+    if (!selection) {
+      setSelectedDraftLine(null);
+      onSelectDraftDetector(null);
+      return;
+    }
+    const layer = draftLayers.find((l) => l.id === selection.layerId);
+    const item = layer?.items.find((i) => i.id === selection.itemId);
+    if (!item) return;
+    if (item.type === "detector") {
+      onSelectDraftDetector(selection);
+      setSelectedDraftLine(null);
+    } else if (item.type === "line") {
+      setSelectedDraftLine(selection);
+      onSelectDraftDetector(null);
+    } else {
+      setSelectedDraftLine(null);
+      onSelectDraftDetector(null);
+    }
+  }
+
+  function deleteSelectedItem() {
+    if (!selectedDraftItem) return;
+    onUpdateLayers((prev) =>
+      prev.map((layer) =>
+        layer.id === selectedDraftItem.layerId
+          ? { ...layer, items: layer.items.filter((item) => item.id !== selectedDraftItem.itemId) }
+          : layer,
+      ),
+    );
+    setSelectedDraftItem(null);
+    setSelectedDraftLine(null);
+    onSelectDraftDetector(null);
+    setDragLineHandle(null);
+  }
+
   function getSelectedLineWithPoints() {
     if (!selectedDraftLine) return null;
     const layer = draftLayers.find((l) => l.id === selectedDraftLine.layerId);
@@ -495,11 +567,28 @@ export function PaintCanvas({
       if (!layer.visible) continue;
       for (const item of layer.items) {
         const displayItem = toDisplayItem(item);
-        const isSelected =
+        const isSelectedDetector =
           item.type === "detector" &&
           selectedDraftDetector?.layerId === layer.id &&
           selectedDraftDetector?.itemId === item.id;
-        drawItem(ctx, displayItem, layer.color, Boolean(isSelected));
+        const isSelectedItem = selectedDraftItem?.layerId === layer.id && selectedDraftItem?.itemId === item.id;
+        drawItem(ctx, displayItem, layer.color, Boolean(isSelectedDetector));
+        if (isSelectedItem && item.type === "rect" && displayItem.type === "rect") {
+          ctx.save();
+          ctx.strokeStyle = "#0ea5e9";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(displayItem.x - 3, displayItem.y - 3, displayItem.w + 6, displayItem.h + 6);
+          ctx.restore();
+        }
+        if (isSelectedItem && item.type === "text" && displayItem.type === "text") {
+          const width = Math.max(40, displayItem.text.length * 8);
+          const height = 18;
+          ctx.save();
+          ctx.strokeStyle = "#0ea5e9";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(displayItem.x - 4, displayItem.y - height, width + 8, height + 6);
+          ctx.restore();
+        }
       }
     }
 
@@ -539,7 +628,7 @@ export function PaintCanvas({
       }
       ctx.restore();
     }
-  }, [allLayers, draft, activeLayer, selectedDraftDetector, selectedDraftLine, dragLineHandle, stageW, stageH, docOffset.x, docOffset.y]);
+  }, [allLayers, draft, activeLayer, selectedDraftDetector, selectedDraftItem, selectedDraftLine, dragLineHandle, stageW, stageH, docOffset.x, docOffset.y]);
 
   useEffect(() => {
     if (!selectedDraftLine) return;
@@ -551,57 +640,52 @@ export function PaintCanvas({
     }
   }, [draftLayers, selectedDraftLine]);
 
+  useEffect(() => {
+    if (!selectedDraftItem) return;
+    const layer = draftLayers.find((l) => l.id === selectedDraftItem.layerId);
+    const exists = layer?.items.some((item) => item.id === selectedDraftItem.itemId);
+    if (!exists) {
+      setSelectedDraftItem(null);
+      setSelectedDraftLine(null);
+      onSelectDraftDetector(null);
+    }
+  }, [draftLayers, selectedDraftItem, onSelectDraftDetector]);
+
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
+    if (e.pointerType === "touch") return;
     if (!activeLayer) return;
     const pt = pointerToStage(e);
     const docPt = toDocPoint(pt);
     const hitHandle = findLineHandleAt(pt.x, pt.y);
     if (hitHandle) {
       setDragLineHandle(hitHandle);
+      setSelectedDraftItem({ layerId: hitHandle.layerId, itemId: hitHandle.itemId });
       onSelectDraftDetector(null);
       return;
     }
 
-    const hitDetector = findDraftDetectorAt(pt.x, pt.y);
-    if (hitDetector) {
-      onSelectDraftDetector(hitDetector);
-      setSelectedDraftLine(null);
-      return;
-    }
-
-    const hitLine = findDraftLineAt(pt.x, pt.y);
-    if (hitLine) {
-      setSelectedDraftLine(hitLine);
-      onSelectDraftDetector(null);
-      if (activeTool === "select" || activeTool === "line") {
-        return;
-      }
+    const hitItem = findDraftItemAt(pt.x, pt.y);
+    if (hitItem) {
+      selectItem(hitItem);
+      if (activeTool === "select" || activeTool === "line") return;
+      const hitLayer = draftLayers.find((l) => l.id === hitItem.layerId);
+      const hitValue = hitLayer?.items.find((item) => item.id === hitItem.itemId);
+      if (activeTool === "detector" && hitValue?.type === "detector") return;
     }
 
     if (activeTool === "select") {
-      onSelectDraftDetector(null);
-      if (!hitLine) {
-        setSelectedDraftLine(null);
+      if (!hitItem) {
+        selectItem(null);
       }
       setIsPanning(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       return;
     }
 
-    if (activeTool === "detector") {
-      // In detector mode, tapping an existing point should select it (not create a duplicate).
-      if (hitDetector) {
-        return;
-      }
-    }
-
-    onSelectDraftDetector(null);
-    if (!hitLine) {
-      setSelectedDraftLine(null);
-    }
+    if (!hitItem) selectItem(null);
 
     if (activeTool === "detector") {
-      addToActive({
+      const nextDetector: OverlayItem = {
         id: crypto.randomUUID(),
         type: "detector",
         x: docPt.x,
@@ -614,15 +698,24 @@ export function PaintCanvas({
           photoDataUrl: null,
           updatedAt: null,
         },
-      });
+      };
+      addToActive(nextDetector);
+      selectItem({ layerId: activeLayer.id, itemId: nextDetector.id });
       return;
     }
     if (activeTool === "text") {
-      addToActive({ id: crypto.randomUUID(), type: "text", x: docPt.x, y: docPt.y, text: "Tekst" });
+      const nextText: OverlayItem = { id: crypto.randomUUID(), type: "text", x: docPt.x, y: docPt.y, text: "Tekst" };
+      addToActive(nextText);
+      selectItem({ layerId: activeLayer.id, itemId: nextText.id });
       return;
     }
     if (activeTool === "erase") {
-      eraseLast();
+      if (hitItem) {
+        selectItem(hitItem);
+        deleteSelectedItem();
+      } else {
+        eraseLast();
+      }
       return;
     }
     if (activeTool === "line" || activeTool === "rect") {
@@ -646,6 +739,7 @@ export function PaintCanvas({
   }
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
+    if (e.pointerType === "touch") return;
     if (dragLineHandle) {
       const docPt = toDocPoint(pointerToStage(e));
       updateLineHandle(dragLineHandle, docPt);
@@ -655,7 +749,7 @@ export function PaintCanvas({
     if (isPanning && dragStart) {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
-      setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setPanOffset((prev) => clampPan({ x: prev.x + dx, y: prev.y + dy }, zoom));
       setDragStart({ x: e.clientX, y: e.clientY });
       return;
     }
@@ -677,6 +771,7 @@ export function PaintCanvas({
   }
 
   function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
+    if (e.pointerType === "touch") return;
     if (dragLineHandle) {
       setDragLineHandle(null);
       return;
@@ -709,16 +804,19 @@ export function PaintCanvas({
         c2y,
       };
       addToActive(nextLine);
-      setSelectedDraftLine({ layerId: activeLayer.id, itemId: nextLine.id });
+      selectItem({ layerId: activeLayer.id, itemId: nextLine.id });
     } else if (activeTool === "rect") {
       const rect = normalizeRect(dragStart.x, dragStart.y, docPt.x, docPt.y);
-      addToActive({ id: crypto.randomUUID(), type: "rect", ...rect });
+      const nextRect: OverlayItem = { id: crypto.randomUUID(), type: "rect", ...rect };
+      addToActive(nextRect);
+      selectItem({ layerId: activeLayer.id, itemId: nextRect.id });
     }
     setDragStart(null);
     setDraft(null);
   }
 
   function onTouchStart(e: TouchEvent<HTMLCanvasElement>) {
+    if (!viewportRef.current) return;
     if (e.touches.length === 2) {
       e.preventDefault();
       const t0 = e.touches[0];
@@ -730,10 +828,12 @@ export function PaintCanvas({
       const cy = (t0.clientY + t1.clientY) / 2;
       setTouchStart({ dist, zoom: manualZoom, cx, cy });
       setZoomMode("manual");
+      touchTapStartRef.current = null;
+      touchPanStartRef.current = null;
     } else if (e.touches.length === 1) {
       const t = e.touches[0];
-      setDragStart({ x: t.clientX, y: t.clientY });
-      setIsPanning(activeTool === "select");
+      touchTapStartRef.current = { x: t.clientX, y: t.clientY };
+      touchPanStartRef.current = { x: t.clientX, y: t.clientY };
     }
   }
 
@@ -746,15 +846,21 @@ export function PaintCanvas({
       const dy = t1.clientY - t0.clientY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const scale = dist / touchStart.dist;
-      const newZoom = clampZoom(touchStart.zoom * scale);
-      setManualZoom(newZoom);
-    } else if (e.touches.length === 1 && dragStart && (isPanning || activeTool === "select")) {
+      const newZoom = touchStart.zoom * scale;
+      const cx = (t0.clientX + t1.clientX) / 2;
+      const cy = (t0.clientY + t1.clientY) / 2;
+      applyZoomAt(newZoom, cx, cy);
+    } else if (e.touches.length === 1 && touchPanStartRef.current) {
       e.preventDefault();
       const t = e.touches[0];
-      const dx = t.clientX - dragStart.x;
-      const dy = t.clientY - dragStart.y;
-      setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-      setDragStart({ x: t.clientX, y: t.clientY });
+      const start = touchPanStartRef.current;
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      const moved = Math.hypot(dx, dy) > 8;
+      if (moved) {
+        setPanOffset((prev) => clampPan({ x: prev.x + dx, y: prev.y + dy }, zoom));
+        touchPanStartRef.current = { x: t.clientX, y: t.clientY };
+      }
     }
   }
 
@@ -765,17 +871,116 @@ export function PaintCanvas({
     if (e.touches.length === 0) {
       setDragStart(null);
       setIsPanning(false);
+      const tapStart = touchTapStartRef.current;
+      touchPanStartRef.current = null;
+      touchTapStartRef.current = null;
+      if (!tapStart) return;
+      const changed = e.changedTouches[0];
+      if (!changed) return;
+      if (Math.hypot(changed.clientX - tapStart.x, changed.clientY - tapStart.y) > 7) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas || !activeLayer) return;
+      const rect = canvas.getBoundingClientRect();
+      const stagePt = {
+        x: ((changed.clientX - rect.left) / rect.width) * stageW,
+        y: ((changed.clientY - rect.top) / rect.height) * stageH,
+      };
+      const docPt = toDocPoint(stagePt);
+      const hitItem = findDraftItemAt(stagePt.x, stagePt.y);
+      if (hitItem) {
+        selectItem(hitItem);
+        const hitLayer = draftLayers.find((l) => l.id === hitItem.layerId);
+        const hitValue = hitLayer?.items.find((item) => item.id === hitItem.itemId);
+        if (activeTool === "detector" && hitValue?.type === "detector") return;
+      } else {
+        selectItem(null);
+      }
+
+      if (activeTool === "detector") {
+        const nextDetector: OverlayItem = {
+          id: crypto.randomUUID(),
+          type: "detector",
+          x: docPt.x,
+          y: docPt.y,
+          checklist: {
+            baseMounted: false,
+            detectorMounted: false,
+            capOn: null,
+            comment: "",
+            photoDataUrl: null,
+            updatedAt: null,
+          },
+        };
+        addToActive(nextDetector);
+        selectItem({ layerId: activeLayer.id, itemId: nextDetector.id });
+      } else if (activeTool === "text") {
+        const nextText: OverlayItem = { id: crypto.randomUUID(), type: "text", x: docPt.x, y: docPt.y, text: "Tekst" };
+        addToActive(nextText);
+        selectItem({ layerId: activeLayer.id, itemId: nextText.id });
+      } else if (activeTool === "erase") {
+        if (hitItem) {
+          selectItem(hitItem);
+          deleteSelectedItem();
+        } else {
+          eraseLast();
+        }
+      }
     }
   }
 
-  function increaseZoom() {
+  function clampPan(nextPan: { x: number; y: number }, nextZoom: number) {
+    const view = viewportRef.current;
+    if (!view) return nextPan;
+    const vw = view.clientWidth;
+    const vh = view.clientHeight;
+    const contentW = stageW * nextZoom;
+    const contentH = stageH * nextZoom;
+    const maxX = Math.max(0, (contentW - vw) / 2);
+    const maxY = Math.max(0, (contentH - vh) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, nextPan.x)),
+      y: Math.max(-maxY, Math.min(maxY, nextPan.y)),
+    };
+  }
+
+  function applyZoomAt(nextZoomUnclamped: number, clientX: number, clientY: number) {
+    const view = viewportRef.current;
+    if (!view) return;
+    const nextZoom = clampZoom(nextZoomUnclamped);
+    const rect = view.getBoundingClientRect();
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+
+    const originX = rect.width / 2 - (stageW * zoom) / 2 + panOffset.x;
+    const originY = rect.height / 2 - (stageH * zoom) / 2 + panOffset.y;
+    const stageX = (relX - originX) / zoom;
+    const stageY = (relY - originY) / zoom;
+
+    const nextOriginX = rect.width / 2 - (stageW * nextZoom) / 2;
+    const nextOriginY = rect.height / 2 - (stageH * nextZoom) / 2;
+    const nextPan = {
+      x: relX - stageX * nextZoom - nextOriginX,
+      y: relY - stageY * nextZoom - nextOriginY,
+    };
+
     setZoomMode("manual");
-    setManualZoom((prev) => clampZoom(Math.max(prev, zoom) + ZOOM_STEP));
+    setManualZoom(nextZoom);
+    setPanOffset(clampPan(nextPan, nextZoom));
+  }
+
+  function increaseZoom() {
+    const view = viewportRef.current;
+    if (!view) return;
+    const rect = view.getBoundingClientRect();
+    applyZoomAt(zoom + ZOOM_STEP, rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
   function decreaseZoom() {
-    setZoomMode("manual");
-    setManualZoom((prev) => clampZoom(Math.max(prev, zoom) - ZOOM_STEP));
+    const view = viewportRef.current;
+    if (!view) return;
+    const rect = view.getBoundingClientRect();
+    applyZoomAt(zoom - ZOOM_STEP, rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
   function fitToViewport() {
@@ -789,14 +994,31 @@ export function PaintCanvas({
     setPanOffset({ x: 0, y: 0 });
   }
 
+  function onWheel(e: WheelEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.0018;
+    if (delta === 0) return;
+    applyZoomAt(zoom + delta, e.clientX, e.clientY);
+  }
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key !== "Delete" && e.key !== "Backspace") || !selectedDraftItem) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      e.preventDefault();
+      deleteSelectedItem();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedDraftItem]);
+
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-900 text-zinc-100">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-2 sm:px-4">
-        <div className="min-w-0 max-w-full">
-          <p className="truncate text-sm font-medium">{drawingName}</p>
-          <p className="hidden truncate text-xs text-zinc-400 sm:block">{filePath}</p>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+    <section className="relative h-full min-h-0 min-w-0 flex-1 bg-zinc-900 text-zinc-100">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 sm:inset-x-3 sm:top-3">
+        <div className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border border-zinc-700/90 bg-zinc-900/92 px-2 py-2 shadow-lg backdrop-blur sm:gap-2 sm:px-3">
+          <p className="mr-1 max-w-[12rem] truncate text-xs font-medium sm:max-w-[20rem] sm:text-sm">{drawingName}</p>
           <button
             type="button"
             onClick={decreaseZoom}
@@ -805,7 +1027,7 @@ export function PaintCanvas({
           >
             −
           </button>
-          <span className="w-14 text-center text-[11px] font-medium tabular-nums sm:text-xs">{Math.round(zoom * 100)}%</span>
+          <span className="w-12 text-center text-[11px] font-medium tabular-nums sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
             onClick={increaseZoom}
@@ -834,70 +1056,77 @@ export function PaintCanvas({
           >
             Fit
           </button>
+          {selectedDraftItem ? (
+            <button
+              type="button"
+              onClick={deleteSelectedItem}
+              className="rounded-md border border-red-500/60 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/15 sm:text-xs"
+              title="Slett valgt element"
+            >
+              <span className="sm:hidden">🗑</span>
+              <span className="hidden sm:inline">Slett</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-auto bg-zinc-800 p-0 sm:p-4">
-        <div 
-          className="relative mx-auto flex min-h-full min-w-full items-start justify-start sm:items-center sm:justify-center"
-          style={{ 
-            minWidth: `${Math.round(stageW * zoom + Math.abs(panOffset.x) * 2)}px`,
-            minHeight: `${Math.round(stageH * zoom + Math.abs(panOffset.y) * 2)}px`
+      <div
+        ref={viewportRef}
+        onWheel={onWheel}
+        className="relative h-full w-full overflow-hidden bg-zinc-800"
+      >
+        <div
+          className="absolute left-1/2 top-1/2 overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
+          style={{
+            width: `${Math.round(stageW * zoom)}px`,
+            height: `${Math.round(stageH * zoom)}px`,
+            transform: `translate(-50%, -50%) translate(${panOffset.x}px, ${panOffset.y}px)`,
           }}
         >
-          <div
-            className="relative overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
-            style={{
-              width: `${Math.round(stageW * zoom)}px`,
-              height: `${Math.round(stageH * zoom)}px`,
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-          >
-            {isPdf ? (
-              pdfPreviewUrl ? (
-                <img
-                  src={pdfPreviewUrl}
-                  alt={`${drawingName} PDF`}
-                  className="h-full w-full object-contain"
-                  style={{ imageRendering: "auto", pointerEvents: "none" }}
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-zinc-100 p-4 text-center text-sm text-zinc-600">
-                  <p>{pdfLoadError ?? "Laster PDF..."}</p>
-                  {pdfLoadError ? (
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Åpne PDF
-                    </a>
-                  ) : null}
-                </div>
-              )
-            ) : (
+          {isPdf ? (
+            pdfPreviewUrl ? (
               <img
-                src={fileUrl}
-                alt={drawingName}
+                src={pdfPreviewUrl}
+                alt={`${drawingName} PDF`}
                 className="h-full w-full object-contain"
                 style={{ imageRendering: "auto", pointerEvents: "none" }}
               />
-            )}
-            <canvas
-              ref={canvasRef}
-              width={stageW}
-              height={stageH}
-              className={`absolute inset-0 z-10 h-full w-full touch-none ${canvasCursor}`}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerLeave={onPointerUp}
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-zinc-100 p-4 text-center text-sm text-zinc-600">
+                <p>{pdfLoadError ?? "Laster PDF..."}</p>
+                {pdfLoadError ? (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Åpne PDF
+                  </a>
+                ) : null}
+              </div>
+            )
+          ) : (
+            <img
+              src={fileUrl}
+              alt={drawingName}
+              className="h-full w-full object-contain"
+              style={{ imageRendering: "auto", pointerEvents: "none" }}
             />
-          </div>
+          )}
+          <canvas
+            ref={canvasRef}
+            width={stageW}
+            height={stageH}
+            className={`absolute inset-0 z-10 h-full w-full touch-none ${canvasCursor}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerUp}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          />
         </div>
       </div>
     </section>
