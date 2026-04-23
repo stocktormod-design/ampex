@@ -17,7 +17,7 @@ export default async function DrawingFullscreenLayout({ children, params }: Layo
   const { projectId } = params instanceof Promise ? await params : params;
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-auto bg-zinc-950">
+    <div className="fixed inset-0 z-[70] overflow-hidden bg-zinc-950">
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[80] flex items-center p-2 sm:p-3">
         <Link
           href={`/dashboard/projects/${projectId}`}
@@ -27,7 +27,7 @@ export default async function DrawingFullscreenLayout({ children, params }: Layo
           <span>Tilbake</span>
         </Link>
       </div>
-      <div className="min-h-full pt-14 sm:pt-16">{children}</div>
+      <div className="h-full w-full">{children}</div>
     </div>
   );
 }

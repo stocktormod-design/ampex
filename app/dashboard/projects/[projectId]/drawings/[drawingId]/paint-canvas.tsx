@@ -355,6 +355,16 @@ export function PaintCanvas({
     };
   }
 
+  function touchToStage(touch: { clientX: number; clientY: number }) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((touch.clientX - rect.left) / rect.width) * stageW,
+      y: ((touch.clientY - rect.top) / rect.height) * stageH,
+    };
+  }
+
   function toDocPoint(pt: { x: number; y: number }) {
     return { x: pt.x + docOffset.x, y: pt.y + docOffset.y };
   }
@@ -830,10 +840,41 @@ export function PaintCanvas({
       setZoomMode("manual");
       touchTapStartRef.current = null;
       touchPanStartRef.current = null;
+      setDragStart(null);
+      setDraft(null);
     } else if (e.touches.length === 1) {
       const t = e.touches[0];
+      const stagePt = touchToStage(t);
+      if (!stagePt || !activeLayer) return;
+      const docPt = toDocPoint(stagePt);
       touchTapStartRef.current = { x: t.clientX, y: t.clientY };
-      touchPanStartRef.current = { x: t.clientX, y: t.clientY };
+
+      if (activeTool === "select") {
+        touchPanStartRef.current = { x: t.clientX, y: t.clientY };
+      } else {
+        touchPanStartRef.current = null;
+      }
+
+      if (activeTool === "line") {
+        setDragStart(docPt);
+        setDraft({
+          type: "line",
+          x1: docPt.x,
+          y1: docPt.y,
+          x2: docPt.x,
+          y2: docPt.y,
+          c1x: docPt.x,
+          c1y: docPt.y,
+          c2x: docPt.x,
+          c2y: docPt.y,
+        });
+      } else if (activeTool === "rect") {
+        setDragStart(docPt);
+        setDraft({ type: "rect", x: docPt.x, y: docPt.y, w: 0, h: 0 });
+      } else {
+        setDragStart(null);
+        setDraft(null);
+      }
     }
   }
 
@@ -850,16 +891,33 @@ export function PaintCanvas({
       const cx = (t0.clientX + t1.clientX) / 2;
       const cy = (t0.clientY + t1.clientY) / 2;
       applyZoomAt(newZoom, cx, cy);
-    } else if (e.touches.length === 1 && touchPanStartRef.current) {
-      e.preventDefault();
+    } else if (e.touches.length === 1) {
       const t = e.touches[0];
-      const start = touchPanStartRef.current;
-      const dx = t.clientX - start.x;
-      const dy = t.clientY - start.y;
-      const moved = Math.hypot(dx, dy) > 8;
-      if (moved) {
-        setPanOffset((prev) => clampPan({ x: prev.x + dx, y: prev.y + dy }, zoom));
-        touchPanStartRef.current = { x: t.clientX, y: t.clientY };
+      const stagePt = touchToStage(t);
+      if (!stagePt) return;
+      const docPt = toDocPoint(stagePt);
+
+      if (activeTool === "line" && dragStart) {
+        e.preventDefault();
+        const c1x = dragStart.x + (docPt.x - dragStart.x) * 0.33;
+        const c1y = dragStart.y + (docPt.y - dragStart.y) * 0.33;
+        const c2x = dragStart.x + (docPt.x - dragStart.x) * 0.67;
+        const c2y = dragStart.y + (docPt.y - dragStart.y) * 0.67;
+        setDraft({ type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y, c1x, c1y, c2x, c2y });
+      } else if (activeTool === "rect" && dragStart) {
+        e.preventDefault();
+        const rect = normalizeRect(dragStart.x, dragStart.y, docPt.x, docPt.y);
+        setDraft({ type: "rect", ...rect });
+      } else if (touchPanStartRef.current) {
+        e.preventDefault();
+        const start = touchPanStartRef.current;
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        const moved = Math.hypot(dx, dy) > 8;
+        if (moved) {
+          setPanOffset((prev) => clampPan({ x: prev.x + dx, y: prev.y + dy }, zoom));
+          touchPanStartRef.current = { x: t.clientX, y: t.clientY };
+        }
       }
     }
   }
@@ -869,6 +927,7 @@ export function PaintCanvas({
       setTouchStart(null);
     }
     if (e.touches.length === 0) {
+      const startPoint = dragStart;
       setDragStart(null);
       setIsPanning(false);
       const tapStart = touchTapStartRef.current;
@@ -877,16 +936,45 @@ export function PaintCanvas({
       if (!tapStart) return;
       const changed = e.changedTouches[0];
       if (!changed) return;
-      if (Math.hypot(changed.clientX - tapStart.x, changed.clientY - tapStart.y) > 7) return;
-
-      const canvas = canvasRef.current;
-      if (!canvas || !activeLayer) return;
-      const rect = canvas.getBoundingClientRect();
-      const stagePt = {
-        x: ((changed.clientX - rect.left) / rect.width) * stageW,
-        y: ((changed.clientY - rect.top) / rect.height) * stageH,
-      };
+      const movedDistance = Math.hypot(changed.clientX - tapStart.x, changed.clientY - tapStart.y);
+      const stagePt = touchToStage(changed);
+      if (!stagePt || !activeLayer) return;
       const docPt = toDocPoint(stagePt);
+
+      if (activeTool === "line" && startPoint) {
+        const c1x = startPoint.x + (docPt.x - startPoint.x) * 0.33;
+        const c1y = startPoint.y + (docPt.y - startPoint.y) * 0.33;
+        const c2x = startPoint.x + (docPt.x - startPoint.x) * 0.67;
+        const c2y = startPoint.y + (docPt.y - startPoint.y) * 0.67;
+        const nextLine: OverlayItem = {
+          id: crypto.randomUUID(),
+          type: "line",
+          x1: startPoint.x,
+          y1: startPoint.y,
+          x2: docPt.x,
+          y2: docPt.y,
+          c1x,
+          c1y,
+          c2x,
+          c2y,
+        };
+        addToActive(nextLine);
+        selectItem({ layerId: activeLayer.id, itemId: nextLine.id });
+        setDraft(null);
+        return;
+      }
+
+      if (activeTool === "rect" && startPoint) {
+        const rect = normalizeRect(startPoint.x, startPoint.y, docPt.x, docPt.y);
+        const nextRect: OverlayItem = { id: crypto.randomUUID(), type: "rect", ...rect };
+        addToActive(nextRect);
+        selectItem({ layerId: activeLayer.id, itemId: nextRect.id });
+        setDraft(null);
+        return;
+      }
+
+      if (movedDistance > 7) return;
+
       const hitItem = findDraftItemAt(stagePt.x, stagePt.y);
       if (hitItem) {
         selectItem(hitItem);
@@ -944,10 +1032,22 @@ export function PaintCanvas({
     };
   }
 
+  function minAllowedZoom() {
+    const view = viewportRef.current;
+    if (!view) return MIN_ZOOM;
+    const isMobileViewport = view.clientWidth < 640;
+    return isMobileViewport ? Math.max(MIN_ZOOM, fitZoom) : MIN_ZOOM;
+  }
+
+  function clampZoomForViewport(value: number) {
+    const minZoom = minAllowedZoom();
+    return Math.max(minZoom, Math.min(MAX_ZOOM, Number(value.toFixed(3))));
+  }
+
   function applyZoomAt(nextZoomUnclamped: number, clientX: number, clientY: number) {
     const view = viewportRef.current;
     if (!view) return;
-    const nextZoom = clampZoom(nextZoomUnclamped);
+    const nextZoom = clampZoomForViewport(nextZoomUnclamped);
     const rect = view.getBoundingClientRect();
     const relX = clientX - rect.left;
     const relY = clientY - rect.top;

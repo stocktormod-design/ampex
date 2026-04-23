@@ -142,6 +142,12 @@ export function PaintWorkbench({
     window.localStorage.setItem(storageKey, JSON.stringify(layers));
   }, [layers, storageKey]);
 
+  useEffect(() => {
+    if (!selectedDraftDetector) return;
+    setMobilePanel("status");
+    setPanelOpen(true);
+  }, [selectedDraftDetector]);
+
   function addLayer() {
     setLayers((prev) => {
       const layer = newLayer(prev.length + 1);
@@ -308,7 +314,7 @@ export function PaintWorkbench({
   }
 
   return (
-    <div className="relative h-[calc(100dvh-3.8rem)] w-full">
+    <div className="relative h-full w-full">
       <div className="relative h-full w-full overflow-hidden bg-zinc-900">
         <PaintCanvas
           fileUrl={fileUrl}
@@ -370,16 +376,16 @@ export function PaintWorkbench({
       ) : null}
 
       <aside
-        className={`absolute right-0 top-0 z-40 flex h-full w-full max-w-[24rem] flex-col gap-3 border-l border-zinc-700 bg-background p-3 transition-transform duration-200 ${
-          panelOpen ? "translate-x-0" : "translate-x-full"
+        className={`absolute right-1.5 top-1.5 z-40 flex h-[calc(100%-0.75rem)] w-[88vw] max-w-[24rem] flex-col gap-3 rounded-xl border border-zinc-700/90 bg-zinc-900/95 p-3 text-zinc-100 shadow-xl backdrop-blur transition-transform duration-200 sm:right-2 sm:top-2 sm:h-[calc(100%-1rem)] ${
+          panelOpen ? "translate-x-0" : "translate-x-[110%]"
         }`}
       >
-        <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card p-1">
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-700 bg-zinc-800/70 p-1">
           <button
             type="button"
             onClick={() => setMobilePanel("status")}
             className={`rounded-md px-2 py-1.5 text-xs font-medium ${
-              mobilePanel === "status" ? "bg-background shadow-sm" : "text-muted-foreground"
+              mobilePanel === "status" ? "bg-zinc-900 shadow-sm" : "text-zinc-400"
             }`}
           >
             Status
@@ -388,7 +394,7 @@ export function PaintWorkbench({
             type="button"
             onClick={() => setMobilePanel("drafts")}
             className={`rounded-md px-2 py-1.5 text-xs font-medium ${
-              mobilePanel === "drafts" ? "bg-background shadow-sm" : "text-muted-foreground"
+              mobilePanel === "drafts" ? "bg-zinc-900 shadow-sm" : "text-zinc-400"
             }`}
           >
             Utkast
@@ -396,24 +402,24 @@ export function PaintWorkbench({
           <button
             type="button"
             onClick={() => setPanelOpen(false)}
-            className="rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-background"
+            className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-900"
           >
             Lukk
           </button>
         </div>
 
-        <section className="rounded-lg border bg-card p-3 shadow-sm">
+        <section className="rounded-lg border border-zinc-700 bg-zinc-800/70 p-3 shadow-sm">
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded border border-border bg-muted/30 px-2 py-1.5">
-              <p className="text-[11px] text-muted-foreground">Aktivt verktøy</p>
+            <div className="rounded border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
+              <p className="text-[11px] text-zinc-400">Aktivt verktøy</p>
               <p className="font-medium">{activeTool}</p>
             </div>
-            <div className="rounded border border-border bg-muted/30 px-2 py-1.5">
-              <p className="text-[11px] text-muted-foreground">Aktivt lag</p>
+            <div className="rounded border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
+              <p className="text-[11px] text-zinc-400">Aktivt lag</p>
               <p className="font-medium">{activeLayer?.name ?? "Ingen"}</p>
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-[11px] text-zinc-400">
             Tips: I linje-modus kan du velge en linje og dra i 4 håndtak for å bøye kurven.
           </p>
         </section>
