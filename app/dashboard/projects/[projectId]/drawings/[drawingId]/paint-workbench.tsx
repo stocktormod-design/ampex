@@ -62,6 +62,47 @@ function toChecklist(value?: DetectorChecklist): DetectorChecklist {
   };
 }
 
+function NeonCheckbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3.5 transition-all active:scale-[0.99] ${
+        checked
+          ? "border-cyan-500/40 bg-cyan-500/5"
+          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all ${
+          checked
+            ? "border-cyan-400 bg-cyan-400/20 shadow-[0_0_8px_rgba(34,211,238,0.35)]"
+            : "border-zinc-600 bg-zinc-800"
+        }`}
+      >
+        {checked && (
+          <svg className="h-3 w-3 text-cyan-400" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+          </svg>
+        )}
+      </span>
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="text-sm font-medium text-zinc-100">{label}</span>
+    </label>
+  );
+}
+
 export function PaintWorkbench({
   drawingId,
   currentUserId,
@@ -78,7 +119,7 @@ export function PaintWorkbench({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
-  const [mobilePanel, setMobilePanel] = useState<"status" | "drafts">("status");
+  const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -103,7 +144,6 @@ export function PaintWorkbench({
           color: layer.color || LAYER_COLORS[idx % LAYER_COLORS.length],
           items: (layer.items ?? []).filter(isOverlayItem),
         }));
-
       if (cleaned.length === 0) {
         const fallback = [newLayer(1)];
         setLayers(fallback);
@@ -120,9 +160,7 @@ export function PaintWorkbench({
   }, [storageKey]);
 
   useEffect(() => {
-    if (!activeLayerId && layers.length > 0) {
-      setActiveLayerId(layers[0].id);
-    }
+    if (!activeLayerId && layers.length > 0) setActiveLayerId(layers[0].id);
   }, [layers, activeLayerId]);
 
   useEffect(() => {
@@ -133,9 +171,7 @@ export function PaintWorkbench({
       return;
     }
     const hasActive = layers.some((l) => l.id === activeLayerId);
-    if (!hasActive) {
-      setActiveLayerId(layers[0].id);
-    }
+    if (!hasActive) setActiveLayerId(layers[0].id);
   }, [layers, activeLayerId]);
 
   useEffect(() => {
@@ -144,7 +180,7 @@ export function PaintWorkbench({
 
   useEffect(() => {
     if (!selectedDraftDetector) return;
-    setMobilePanel("status");
+    setActiveTab("status");
     setPanelOpen(true);
   }, [selectedDraftDetector]);
 
@@ -210,16 +246,17 @@ export function PaintWorkbench({
     if (!item || item.type !== "detector") return null;
     return { layer, item };
   }, [layers, selectedDraftDetector]);
-  const activeLayer = useMemo(() => layers.find((layer) => layer.id === activeLayerId) ?? null, [layers, activeLayerId]);
+
+  const activeLayer = useMemo(
+    () => layers.find((layer) => layer.id === activeLayerId) ?? null,
+    [layers, activeLayerId],
+  );
 
   function removeDraftRow(row: DraftPublishRow) {
     setLayers((prev) =>
       prev.map((layer) =>
         layer.id === row.layerId
-          ? {
-              ...layer,
-              items: layer.items.filter((_, idx) => idx !== row.indexInLayer),
-            }
+          ? { ...layer, items: layer.items.filter((_, idx) => idx !== row.indexInLayer) }
           : layer,
       ),
     );
@@ -235,14 +272,7 @@ export function PaintWorkbench({
           items: layer.items.map((item) => {
             if (item.id !== selectedDraftDetector.itemId || item.type !== "detector") return item;
             const current = toChecklist(item.checklist);
-            return {
-              ...item,
-              checklist: {
-                ...current,
-                ...next,
-                updatedAt: new Date().toISOString(),
-              },
-            };
+            return { ...item, checklist: { ...current, ...next, updatedAt: new Date().toISOString() } };
           }),
         };
       }),
@@ -285,7 +315,6 @@ export function PaintWorkbench({
         setPublishError(result.error);
         return;
       }
-
       const data = result.data as {
         id: string;
         drawing_id: string;
@@ -313,9 +342,14 @@ export function PaintWorkbench({
     });
   }
 
+  const checklist = selectedDraftDetectorItem
+    ? toChecklist(selectedDraftDetectorItem.item.checklist)
+    : null;
+
   return (
     <div className="relative h-full w-full">
-      <div className="relative h-full w-full overflow-hidden bg-zinc-900">
+      {/* Canvas area */}
+      <div className="relative h-full w-full overflow-hidden bg-zinc-950">
         <PaintCanvas
           fileUrl={fileUrl}
           filePath={filePath}
@@ -330,6 +364,8 @@ export function PaintWorkbench({
           panelOpen={panelOpen}
           onTogglePanel={() => setPanelOpen((v) => !v)}
         />
+
+        {/* Desktop right-side toolbar */}
         <div className="pointer-events-none absolute right-2 top-14 z-20 hidden sm:block">
           <div className="pointer-events-auto">
             <PaintToolbar
@@ -344,12 +380,15 @@ export function PaintWorkbench({
             />
           </div>
         </div>
+
+        {/* Mobile bottom toolbar */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 sm:hidden">
-          <div className="pointer-events-auto border-t border-zinc-700/70 bg-zinc-900/95 backdrop-blur">
+          <div className="pointer-events-auto border-t border-zinc-800 bg-zinc-950/96 backdrop-blur-md">
             <PaintToolbar
               bottomBar
               panelOpen={panelOpen}
               onTogglePanel={() => setPanelOpen((v) => !v)}
+              activeLayer={activeLayer}
               activeTool={activeTool}
               onSelectTool={setActiveTool}
               layers={layers}
@@ -363,230 +402,286 @@ export function PaintWorkbench({
         </div>
       </div>
 
-      {panelOpen ? (
+      {/* Backdrop */}
+      {panelOpen && (
         <button
           type="button"
           aria-label="Lukk sidepanel"
           onClick={() => setPanelOpen(false)}
-          className="absolute inset-0 z-30 bg-black/45"
+          className="absolute inset-0 z-30 bg-black/70"
         />
-      ) : null}
+      )}
 
+      {/* Slide-in side panel */}
       <aside
-        className={`absolute right-1.5 top-1.5 z-40 flex h-[calc(100%-4rem)] w-[88vw] max-w-[24rem] flex-col gap-3 rounded-xl border border-zinc-700/90 bg-zinc-900/95 p-3 text-zinc-100 shadow-xl backdrop-blur transition-transform duration-200 sm:right-2 sm:top-2 sm:h-[calc(100%-1rem)] ${
-          panelOpen ? "translate-x-0" : "translate-x-[110%]"
+        className={`absolute right-0 top-0 z-40 flex h-full w-full max-w-[22rem] flex-col border-l border-zinc-800 bg-[#0d0d10] text-zinc-100 shadow-2xl transition-transform duration-300 ease-out ${
+          panelOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-700 bg-zinc-800/70 p-1">
-          <button
-            type="button"
-            onClick={() => setMobilePanel("status")}
-            className={`rounded-md px-2 py-1.5 text-xs font-medium ${
-              mobilePanel === "status" ? "bg-zinc-900 shadow-sm" : "text-zinc-400"
-            }`}
-          >
-            Status
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobilePanel("drafts")}
-            className={`rounded-md px-2 py-1.5 text-xs font-medium ${
-              mobilePanel === "drafts" ? "bg-zinc-900 shadow-sm" : "text-zinc-400"
-            }`}
-          >
-            Utkast
-          </button>
+        {/* Tab bar */}
+        <div className="flex shrink-0 items-stretch justify-between border-b border-zinc-800">
+          <div className="flex">
+            {(["status", "drafts"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`relative px-5 py-3.5 text-sm font-semibold tracking-tight transition-colors ${
+                  activeTab === tab ? "text-cyan-400" : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "status" ? "Status" : "Utkast"}
+                {tab === "drafts" && draftRows.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400">
+                    {draftRows.length}
+                  </span>
+                )}
+                {activeTab === tab && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-cyan-400" />
+                )}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => setPanelOpen(false)}
-            className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-900"
+            title="Lukk"
+            className="flex items-center justify-center px-4 text-zinc-600 transition-colors hover:text-zinc-300"
           >
-            Lukk
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4l8 8M12 4l-8 8" />
+            </svg>
           </button>
         </div>
 
-        <section className="rounded-lg border border-zinc-700 bg-zinc-800/70 p-3 shadow-sm">
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
-              <p className="text-[11px] text-zinc-400">Aktivt verktøy</p>
-              <p className="font-medium">{activeTool}</p>
-            </div>
-            <div className="rounded border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
-              <p className="text-[11px] text-zinc-400">Aktivt lag</p>
-              <p className="font-medium">{activeLayer?.name ?? "Ingen"}</p>
-            </div>
+        {/* Active state strip */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800/60 px-4 py-2.5">
+          <div className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Verktøy</span>
+            <span className="text-xs font-bold text-cyan-300">{activeTool}</span>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-400">
-            Tips: I linje-modus kan du velge en linje og dra i 4 håndtak for å bøye kurven.
-          </p>
-        </section>
+          {activeLayer && (
+            <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-full ring-1 ring-white/10"
+                style={{ backgroundColor: activeLayer.color }}
+              />
+              <span className="text-xs font-semibold text-zinc-200">{activeLayer.name}</span>
+            </div>
+          )}
+        </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "drafts" ? "hidden" : ""}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Detektor-status</h2>
-            <span className="text-xs text-muted-foreground">
-              {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et detektor-punkt"}
-            </span>
-          </div>
-          {selectedDraftDetectorItem ? (
-            <div className="mt-3 grid gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={toChecklist(selectedDraftDetectorItem.item.checklist).baseMounted}
-                  onChange={(e) => updateSelectedDetectorChecklist({ baseMounted: e.target.checked })}
-                />
-                Sokkel montert
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={toChecklist(selectedDraftDetectorItem.item.checklist).detectorMounted}
-                  onChange={(e) => updateSelectedDetectorChecklist({ detectorMounted: e.target.checked })}
-                />
-                Detektor montert
-              </label>
-              <div className="space-y-1">
-                <p className="text-xs font-medium">Kappe</p>
-                <div className="flex gap-3 text-sm">
-                  <label className="flex items-center gap-1">
-                    <input
-                      type="radio"
-                      name="capOn"
-                      checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "yes"}
-                      onChange={() => updateSelectedDetectorChecklist({ capOn: "yes" })}
-                    />
-                    Ja
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <input
-                      type="radio"
-                      name="capOn"
-                      checked={toChecklist(selectedDraftDetectorItem.item.checklist).capOn === "no"}
-                      onChange={() => updateSelectedDetectorChecklist({ capOn: "no" })}
-                    />
-                    Nei
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => updateSelectedDetectorChecklist({ capOn: null })}
-                    className="rounded border border-input px-1.5 text-xs hover:bg-muted"
-                  >
-                    Nullstill
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Kommentar</label>
-                <textarea
-                  value={toChecklist(selectedDraftDetectorItem.item.checklist).comment}
-                  onChange={(e) => updateSelectedDetectorChecklist({ comment: e.target.value })}
-                  rows={3}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-                  placeholder="F.eks. Mangler strøm, følger opp i morgen..."
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Bildevedlegg</label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
-                    Ta bilde
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(e) => {
-                        void onAttachPhoto(e.target.files?.[0] ?? null);
-                        e.currentTarget.value = "";
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-xs font-medium hover:bg-muted">
-                    Velg fil
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        void onAttachPhoto(e.target.files?.[0] ?? null);
-                        e.currentTarget.value = "";
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Mobil: «Ta bilde» åpner kamera direkte. Fungerer for både felt og kontor.
+        {/* Scrollable content */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* ── STATUS TAB ── */}
+          {activeTab === "status" && (
+            <div className="space-y-5 px-4 py-4">
+              {/* Tips */}
+              <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Tips</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-amber-100/70">
+                  Linje-modus: velg en linje og dra i 4 håndtak for å bøye kurven. Trykk på et detektor-punkt i tegningen for å redigere status nedenfor.
                 </p>
-                {toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ? (
-                  <img
-                    src={toChecklist(selectedDraftDetectorItem.item.checklist).photoDataUrl ?? ""}
-                    alt="Vedlegg"
-                    className="mt-1 h-24 rounded border object-cover"
-                  />
-                ) : (
-                  <p className="text-xs text-muted-foreground">Ingen vedlegg ennå.</p>
-                )}
-                {toChecklist(selectedDraftDetectorItem.item.checklist).photoPath ? (
-                  <p className="text-[11px] text-muted-foreground">Lagringssti settes ved publisering.</p>
-                ) : null}
-                {draftError ? <p className="text-xs text-destructive">{draftError}</p> : null}
               </div>
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Klikk på et detektor-punkt i tegningen for å redigere status-checklist.
-            </p>
-          )}
-        </section>
 
-        <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "status" ? "hidden" : ""}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Utkast på bruker</h2>
-            <span className="text-xs text-muted-foreground">{draftRows.length} elementer</span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Utkast lagres lokalt på bruker. Publiser hvert element med synlighet (default: alle).
-          </p>
-          {publishError ? (
-            <p className="mt-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-              {publishError}
-            </p>
-          ) : null}
-          {draftRows.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground">Ingen lokale utkast ennå.</p>
-          ) : (
-            <ul className="mt-3 space-y-1.5">
-              {draftRows.map((row) => (
-                <li key={row.localKey} className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-1.5">
-                  <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[11px]">
-                    {row.item.type}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">{row.layerName}</span>
-                  <select
-                    value={visibilityMap[row.localKey] ?? "all"}
-                    onChange={(e) =>
-                      setVisibilityMap((prev) => ({ ...prev, [row.localKey]: e.target.value as OverlayVisibility }))
-                    }
-                    className="h-7 rounded border border-input bg-background px-2 text-[11px]"
-                  >
-                    <option value="all">Synlig: alle</option>
-                    <option value="admins">Synlig: kun admin</option>
-                  </select>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => publishOne(row)}
-                    className="rounded border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
-                  >
-                    Publiser
-                  </button>
-                </li>
-              ))}
-            </ul>
+              {/* Detektor-status heading */}
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-bold text-zinc-100">Detektor-status</h2>
+                <span className="text-xs text-zinc-600">
+                  {selectedDraftDetectorItem ? selectedDraftDetectorItem.layer.name : "Velg et punkt"}
+                </span>
+              </div>
+
+              {checklist && selectedDraftDetectorItem ? (
+                <div className="space-y-3">
+                  {/* Checkboxes */}
+                  <NeonCheckbox
+                    checked={checklist.baseMounted}
+                    onChange={(v) => updateSelectedDetectorChecklist({ baseMounted: v })}
+                    label="Sokkel montert"
+                  />
+                  <NeonCheckbox
+                    checked={checklist.detectorMounted}
+                    onChange={(v) => updateSelectedDetectorChecklist({ detectorMounted: v })}
+                    label="Detektor montert"
+                  />
+
+                  {/* Kappe */}
+                  <div>
+                    <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kappe</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["yes", "no"] as const).map((v) => {
+                        const active = checklist.capOn === v;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => updateSelectedDetectorChecklist({ capOn: v })}
+                            className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
+                              active
+                                ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_16px_rgba(34,211,238,0.06)]"
+                                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                            }`}
+                          >
+                            {v === "yes" ? "Ja" : "Nei"}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => updateSelectedDetectorChecklist({ capOn: null })}
+                        className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
+                          checklist.capOn === null
+                            ? "border-zinc-600 bg-zinc-800 text-zinc-300"
+                            : "border-zinc-800 bg-zinc-900 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400"
+                        }`}
+                      >
+                        —
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Comment */}
+                  <div>
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Kommentar
+                    </label>
+                    <textarea
+                      value={checklist.comment}
+                      onChange={(e) => updateSelectedDetectorChecklist({ comment: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-700 transition-colors focus:border-cyan-500/50 focus:outline-none"
+                      placeholder="F.eks. Mangler strøm, følger opp..."
+                    />
+                  </div>
+
+                  {/* Photo */}
+                  <div>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Bildevedlegg
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 py-3 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 active:bg-zinc-800">
+                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                        </svg>
+                        Ta bilde
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="sr-only"
+                          onChange={(e) => {
+                            void onAttachPhoto(e.target.files?.[0] ?? null);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 py-3 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 active:bg-zinc-800">
+                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        Velg fil
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={(e) => {
+                            void onAttachPhoto(e.target.files?.[0] ?? null);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {checklist.photoDataUrl ? (
+                      <img
+                        src={checklist.photoDataUrl}
+                        alt="Vedlegg"
+                        className="mt-3 h-32 w-full rounded-xl border border-zinc-800 object-cover"
+                      />
+                    ) : (
+                      <p className="mt-2 text-center text-xs text-zinc-700">Ingen vedlegg ennå</p>
+                    )}
+                    {draftError && (
+                      <p className="mt-2 text-xs font-semibold text-red-400">{draftError}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 py-8 text-center">
+                  <p className="text-3xl">🔥</p>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-500">
+                    Trykk på et detektor-punkt<br />i tegningen for å redigere.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
-        </section>
+
+          {/* ── DRAFTS TAB ── */}
+          {activeTab === "drafts" && (
+            <div className="space-y-4 px-4 py-4">
+              <div>
+                <h2 className="text-sm font-bold text-zinc-100">Utkast på bruker</h2>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                  Lagres lokalt. Publiser hvert element med ønsket synlighet.
+                </p>
+              </div>
+
+              {publishError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs font-semibold text-red-400">
+                  {publishError}
+                </div>
+              )}
+
+              {draftRows.length === 0 ? (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 py-8 text-center">
+                  <p className="text-3xl">📋</p>
+                  <p className="mt-3 text-sm text-zinc-600">Ingen lokale utkast ennå.</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {draftRows.map((row) => (
+                    <li key={row.localKey} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3.5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                          {row.item.type}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: row.layerColor }} />
+                          <span className="text-xs text-zinc-500">{row.layerName}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={visibilityMap[row.localKey] ?? "all"}
+                          onChange={(e) =>
+                            setVisibilityMap((prev) => ({
+                              ...prev,
+                              [row.localKey]: e.target.value as OverlayVisibility,
+                            }))
+                          }
+                          className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-zinc-200 focus:border-cyan-500/50 focus:outline-none"
+                        >
+                          <option value="all">Synlig: alle</option>
+                          <option value="admins">Kun admin</option>
+                        </select>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => publishOne(row)}
+                          className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+                        >
+                          Publiser
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </div>

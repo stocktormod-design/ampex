@@ -1134,23 +1134,23 @@ export function PaintCanvas({
   }, [selectedDraftItem]);
 
   return (
-    <section className="relative h-full min-h-0 min-w-0 flex-1 bg-zinc-900 text-zinc-100">
+    <section className="relative h-full min-h-0 min-w-0 flex-1 bg-zinc-950 text-zinc-100">
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 sm:inset-x-3 sm:top-3">
-        <div className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border border-zinc-700/90 bg-zinc-900/92 px-2 py-2 shadow-lg backdrop-blur sm:gap-2 sm:px-3">
-          <p className="mr-1 max-w-[12rem] truncate text-xs font-medium sm:max-w-[20rem] sm:text-sm">{drawingName}</p>
+        <div className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-950/95 px-2 py-1.5 shadow-xl backdrop-blur-md sm:gap-1.5 sm:px-3">
+          <p className="mr-1 max-w-[10rem] truncate text-xs font-semibold text-zinc-300 sm:max-w-[18rem] sm:text-sm">{drawingName}</p>
           <button
             type="button"
             onClick={decreaseZoom}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
             title="Zoom ut"
           >
             −
           </button>
-          <span className="w-12 text-center text-[11px] font-medium tabular-nums sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
+          <span className="w-11 text-center text-[11px] font-bold tabular-nums text-zinc-300 sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
           <button
             type="button"
             onClick={increaseZoom}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
             title="Zoom inn"
           >
             +
@@ -1158,7 +1158,7 @@ export function PaintCanvas({
           <button
             type="button"
             onClick={resetView}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-[11px] font-medium hover:bg-zinc-700 sm:text-xs"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
             title="Tilbakestill visning (1.5x)"
           >
             ⌖
@@ -1166,10 +1166,10 @@ export function PaintCanvas({
           <button
             type="button"
             onClick={fitToViewport}
-            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium sm:text-xs ${
+            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all sm:text-xs ${
               zoomMode === "fit"
-                ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
-                : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+                ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.12)]"
+                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
             }`}
             title="Tilpass vindu"
           >
@@ -1179,7 +1179,7 @@ export function PaintCanvas({
             <button
               type="button"
               onClick={deleteSelectedItem}
-              className="rounded-md border border-red-500/60 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/15 sm:text-xs"
+              className="rounded-lg border border-red-500/40 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-red-400 transition-colors hover:border-red-500/60 hover:bg-red-500/10 sm:text-xs"
               title="Slett valgt element"
             >
               <span className="sm:hidden">🗑</span>
@@ -1190,10 +1190,10 @@ export function PaintCanvas({
             <button
               type="button"
               onClick={onTogglePanel}
-              className={`hidden sm:flex items-center rounded-md border px-2.5 py-1.5 text-[11px] font-medium sm:text-xs ${
+              className={`hidden items-center rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all sm:flex sm:text-xs ${
                 panelOpen
-                  ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
-                  : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.12)]"
+                  : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
               }`}
               title={panelOpen ? "Skjul panel" : "Vis panel"}
             >
@@ -1206,7 +1206,7 @@ export function PaintCanvas({
       <div
         ref={viewportRef}
         onWheel={onWheel}
-        className="relative h-full w-full overflow-hidden bg-zinc-800"
+        className="relative h-full w-full overflow-hidden bg-zinc-950"
       >
         <div
           className="absolute left-1/2 top-1/2 overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"

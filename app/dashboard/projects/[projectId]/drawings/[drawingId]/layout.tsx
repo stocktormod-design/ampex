@@ -18,10 +18,11 @@ export default async function DrawingFullscreenLayout({ children, params }: Layo
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-zinc-950">
-      <header className="flex h-11 shrink-0 items-center border-b border-zinc-800 bg-zinc-900 px-3">
+      <header className="relative flex h-11 shrink-0 items-center border-b border-zinc-800 bg-zinc-950 px-3">
+        <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
         <Link
           href={`/dashboard/projects/${projectId}`}
-          className="inline-flex h-8 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/80 px-3 text-sm text-zinc-100 hover:bg-zinc-700"
+          className="inline-flex h-8 items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
         >
           <span aria-hidden>←</span>
           <span>Tilbake</span>
