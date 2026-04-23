@@ -38,6 +38,9 @@ type Props = {
   onToggleLayer: (layerId: string) => void;
   onClearActiveLayer: () => void;
   mobile?: boolean;
+  bottomBar?: boolean;
+  panelOpen?: boolean;
+  onTogglePanel?: () => void;
 };
 
 export function PaintToolbar({
@@ -50,8 +53,80 @@ export function PaintToolbar({
   onToggleLayer,
   onClearActiveLayer,
   mobile = false,
+  bottomBar = false,
+  panelOpen,
+  onTogglePanel,
 }: Props) {
   const current = useMemo(() => TOOLS.find((t) => t.id === activeTool) ?? TOOLS[0], [activeTool]);
+
+  if (bottomBar) {
+    const isLayerVisible = layers.find((l) => l.id === activeLayerId)?.visible ?? true;
+    return (
+      <nav className="flex w-full items-center gap-1 overflow-x-auto px-2 py-1.5">
+        {TOOLS.map((tool) => {
+          const Icon = ICONS[tool.id];
+          return (
+            <button
+              key={tool.id}
+              type="button"
+              title={`${tool.label} — ${tool.hint}`}
+              onClick={() => onSelectTool(tool.id)}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                activeTool === tool.id
+                  ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
+              }`}
+            >
+              <Icon className="size-4" aria-hidden />
+            </button>
+          );
+        })}
+        <div className="mx-1 h-6 w-px shrink-0 bg-zinc-700" />
+        <button
+          type="button"
+          onClick={onAddLayer}
+          title="Nytt lag"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 hover:bg-zinc-700"
+        >
+          <Plus className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          title="Vis/skjul aktivt lag"
+          onClick={() => { if (!activeLayerId) return; onToggleLayer(activeLayerId); }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 hover:bg-zinc-700"
+        >
+          {isLayerVisible ? <Eye className="size-4" aria-hidden /> : <EyeOff className="size-4" aria-hidden />}
+        </button>
+        <button
+          type="button"
+          title="Tøm aktivt lag"
+          onClick={onClearActiveLayer}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-500/50 bg-zinc-900 text-red-300 hover:bg-red-500/10"
+        >
+          <Eraser className="size-4" aria-hidden />
+        </button>
+        {onTogglePanel ? (
+          <>
+            <div className="mx-1 h-6 w-px shrink-0 bg-zinc-700" />
+            <button
+              type="button"
+              onClick={onTogglePanel}
+              title={panelOpen ? "Skjul panel" : "Vis panel"}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                panelOpen
+                  ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
+              }`}
+            >
+              <Layers3 className="size-4" aria-hidden />
+            </button>
+          </>
+        ) : null}
+      </nav>
+    );
+  }
+
   if (mobile) {
     return (
       <aside className="w-[3.25rem] rounded-xl border border-zinc-700/70 bg-zinc-900/95 text-zinc-100 shadow-xl backdrop-blur">

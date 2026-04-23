@@ -60,7 +60,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
   }
 
   return (
-    <main className="h-[calc(100dvh-3.8rem)] p-2 sm:p-3">
+    <main className="h-full p-2 sm:p-3">
       <section className="h-full min-h-[420px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 sm:min-h-[520px]">
         <DrawingViewerCanvas fileUrl={signed.signedUrl} filePath={drawing.file_path} drawingName={drawing.name} />
       </section>

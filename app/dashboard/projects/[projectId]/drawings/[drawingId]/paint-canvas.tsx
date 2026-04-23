@@ -14,6 +14,8 @@ type Props = {
   onUpdateLayers: (updater: (prev: OverlayLayer[]) => OverlayLayer[]) => void;
   selectedDraftDetector: { layerId: string; itemId: string } | null;
   onSelectDraftDetector: (selection: { layerId: string; itemId: string } | null) => void;
+  panelOpen?: boolean;
+  onTogglePanel?: () => void;
 };
 
 function fileExt(path: string): string {
@@ -187,6 +189,8 @@ export function PaintCanvas({
   onUpdateLayers,
   selectedDraftDetector,
   onSelectDraftDetector,
+  panelOpen,
+  onTogglePanel,
 }: Props) {
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("manual");
   const [manualZoom, setManualZoom] = useState(1.5);
@@ -1180,6 +1184,20 @@ export function PaintCanvas({
             >
               <span className="sm:hidden">🗑</span>
               <span className="hidden sm:inline">Slett</span>
+            </button>
+          ) : null}
+          {onTogglePanel ? (
+            <button
+              type="button"
+              onClick={onTogglePanel}
+              className={`hidden sm:flex items-center rounded-md border px-2.5 py-1.5 text-[11px] font-medium sm:text-xs ${
+                panelOpen
+                  ? "border-blue-400/80 bg-blue-500/20 text-blue-100"
+                  : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+              }`}
+              title={panelOpen ? "Skjul panel" : "Vis panel"}
+            >
+              {panelOpen ? "Skjul" : "Panel"}
             </button>
           ) : null}
         </div>

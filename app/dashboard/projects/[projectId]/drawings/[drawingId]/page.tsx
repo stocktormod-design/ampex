@@ -87,7 +87,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   }));
 
   return (
-    <main className="h-[calc(100dvh-3.8rem)] p-2 sm:p-3">
+    <main className="h-full">
       <PaintWorkbench
         fileUrl={signed.signedUrl}
         filePath={drawing.file_path}

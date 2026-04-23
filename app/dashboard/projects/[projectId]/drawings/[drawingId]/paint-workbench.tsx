@@ -327,8 +327,10 @@ export function PaintWorkbench({
           onUpdateLayers={setLayers}
           selectedDraftDetector={selectedDraftDetector}
           onSelectDraftDetector={setSelectedDraftDetector}
+          panelOpen={panelOpen}
+          onTogglePanel={() => setPanelOpen((v) => !v)}
         />
-        <div className="pointer-events-none absolute right-2 top-16 z-20 hidden sm:block">
+        <div className="pointer-events-none absolute right-2 top-14 z-20 hidden sm:block">
           <div className="pointer-events-auto">
             <PaintToolbar
               activeTool={activeTool}
@@ -342,28 +344,23 @@ export function PaintWorkbench({
             />
           </div>
         </div>
-        <div className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 sm:hidden">
-          <div className="pointer-events-auto">
-          <PaintToolbar
-            mobile
-            activeTool={activeTool}
-            onSelectTool={setActiveTool}
-            layers={layers}
-            activeLayerId={activeLayerId}
-            onSetActiveLayer={setActiveLayerId}
-            onAddLayer={addLayer}
-            onToggleLayer={toggleLayer}
-            onClearActiveLayer={clearActiveLayer}
-          />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 sm:hidden">
+          <div className="pointer-events-auto border-t border-zinc-700/70 bg-zinc-900/95 backdrop-blur">
+            <PaintToolbar
+              bottomBar
+              panelOpen={panelOpen}
+              onTogglePanel={() => setPanelOpen((v) => !v)}
+              activeTool={activeTool}
+              onSelectTool={setActiveTool}
+              layers={layers}
+              activeLayerId={activeLayerId}
+              onSetActiveLayer={setActiveLayerId}
+              onAddLayer={addLayer}
+              onToggleLayer={toggleLayer}
+              onClearActiveLayer={clearActiveLayer}
+            />
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setPanelOpen((v) => !v)}
-          className="absolute right-2 top-2 z-30 rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1 text-xs text-zinc-100 hover:bg-zinc-800"
-        >
-          {panelOpen ? "Skjul panel" : "Vis panel"}
-        </button>
       </div>
 
       {panelOpen ? (
@@ -376,7 +373,7 @@ export function PaintWorkbench({
       ) : null}
 
       <aside
-        className={`absolute right-1.5 top-1.5 z-40 flex h-[calc(100%-0.75rem)] w-[88vw] max-w-[24rem] flex-col gap-3 rounded-xl border border-zinc-700/90 bg-zinc-900/95 p-3 text-zinc-100 shadow-xl backdrop-blur transition-transform duration-200 sm:right-2 sm:top-2 sm:h-[calc(100%-1rem)] ${
+        className={`absolute right-1.5 top-1.5 z-40 flex h-[calc(100%-4rem)] w-[88vw] max-w-[24rem] flex-col gap-3 rounded-xl border border-zinc-700/90 bg-zinc-900/95 p-3 text-zinc-100 shadow-xl backdrop-blur transition-transform duration-200 sm:right-2 sm:top-2 sm:h-[calc(100%-1rem)] ${
           panelOpen ? "translate-x-0" : "translate-x-[110%]"
         }`}
       >
