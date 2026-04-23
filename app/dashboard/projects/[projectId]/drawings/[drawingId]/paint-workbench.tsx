@@ -204,6 +204,7 @@ export function PaintWorkbench({
     if (!item || item.type !== "detector") return null;
     return { layer, item };
   }, [layers, selectedDraftDetector]);
+  const activeLayer = useMemo(() => layers.find((layer) => layer.id === activeLayerId) ?? null, [layers, activeLayerId]);
 
   function removeDraftRow(row: DraftPublishRow) {
     setLayers((prev) =>
@@ -369,7 +370,7 @@ export function PaintWorkbench({
       ) : null}
 
       <aside
-        className={`absolute right-0 top-0 z-40 h-full w-full max-w-[22rem] space-y-3 border-l border-zinc-700 bg-background p-3 transition-transform duration-200 ${
+        className={`absolute right-0 top-0 z-40 flex h-full w-full max-w-[24rem] flex-col gap-3 border-l border-zinc-700 bg-background p-3 transition-transform duration-200 ${
           panelOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -401,6 +402,23 @@ export function PaintWorkbench({
           </button>
         </div>
 
+        <section className="rounded-lg border bg-card p-3 shadow-sm">
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded border border-border bg-muted/30 px-2 py-1.5">
+              <p className="text-[11px] text-muted-foreground">Aktivt verktøy</p>
+              <p className="font-medium">{activeTool}</p>
+            </div>
+            <div className="rounded border border-border bg-muted/30 px-2 py-1.5">
+              <p className="text-[11px] text-muted-foreground">Aktivt lag</p>
+              <p className="font-medium">{activeLayer?.name ?? "Ingen"}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Tips: I linje-modus kan du velge en linje og dra i 4 håndtak for å bøye kurven.
+          </p>
+        </section>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         <section className={`rounded-lg border bg-card p-3 shadow-sm ${mobilePanel === "drafts" ? "hidden" : ""}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Detektor-status</h2>
@@ -566,6 +584,7 @@ export function PaintWorkbench({
             </ul>
           )}
         </section>
+        </div>
       </aside>
     </div>
   );

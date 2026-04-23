@@ -30,7 +30,7 @@ const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.1;
 
 type DraftShape =
-  | { type: "line"; x1: number; y1: number; x2: number; y2: number }
+  | { type: "line"; x1: number; y1: number; x2: number; y2: number; c1x: number; c1y: number; c2x: number; c2y: number }
   | { type: "rect"; x: number; y: number; w: number; h: number }
   | null;
 
@@ -80,6 +80,48 @@ function normalizeRect(x1: number, y1: number, x2: number, y2: number) {
   return { x, y, w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
 }
 
+type LinePoints = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  c1x: number;
+  c1y: number;
+  c2x: number;
+  c2y: number;
+};
+
+type LineHandle = "start" | "end" | "c1" | "c2";
+
+function linePoints(item: Extract<OverlayItem, { type: "line" }>): LinePoints {
+  const c1x = item.c1x ?? item.x1 + (item.x2 - item.x1) * 0.33;
+  const c1y = item.c1y ?? item.y1 + (item.y2 - item.y1) * 0.33;
+  const c2x = item.c2x ?? item.x1 + (item.x2 - item.x1) * 0.67;
+  const c2y = item.c2y ?? item.y1 + (item.y2 - item.y1) * 0.67;
+  return { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2, c1x, c1y, c2x, c2y };
+}
+
+function bezierPoint(t: number, pts: LinePoints) {
+  const mt = 1 - t;
+  const x =
+    mt ** 3 * pts.x1 + 3 * mt ** 2 * t * pts.c1x + 3 * mt * t ** 2 * pts.c2x + t ** 3 * pts.x2;
+  const y =
+    mt ** 3 * pts.y1 + 3 * mt ** 2 * t * pts.c1y + 3 * mt * t ** 2 * pts.c2y + t ** 3 * pts.y2;
+  return { x, y };
+}
+
+function distancePointToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const apx = px - ax;
+  const apy = py - ay;
+  const abLenSq = abx * abx + aby * aby || 1;
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const cx = ax + t * abx;
+  const cy = ay + t * aby;
+  return Math.hypot(px - cx, py - cy);
+}
+
 function drawItem(
   ctx: CanvasRenderingContext2D,
   item: OverlayItem,
@@ -114,9 +156,10 @@ function drawItem(
   }
 
   if (item.type === "line") {
+    const pts = linePoints(item);
     ctx.beginPath();
-    ctx.moveTo(item.x1, item.y1);
-    ctx.lineTo(item.x2, item.y2);
+    ctx.moveTo(pts.x1, pts.y1);
+    ctx.bezierCurveTo(pts.c1x, pts.c1y, pts.c2x, pts.c2y, pts.x2, pts.y2);
     ctx.stroke();
     return;
   }
@@ -156,6 +199,8 @@ export function PaintCanvas({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [touchStart, setTouchStart] = useState<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
+  const [selectedDraftLine, setSelectedDraftLine] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [dragLineHandle, setDragLineHandle] = useState<{ layerId: string; itemId: string; handle: LineHandle } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ext = fileExt(filePath);
   const isPdf = ext === "pdf";
@@ -165,6 +210,7 @@ export function PaintCanvas({
   const stageH = stageSize.h;
   const zoom = zoomMode === "fit" ? fitZoom : manualZoom;
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const canvasCursor = isPanning ? "cursor-grabbing" : activeTool === "select" || dragLineHandle ? "cursor-grab" : "cursor-crosshair";
 
   useEffect(() => {
     let cancelled = false;
@@ -315,6 +361,10 @@ export function PaintCanvas({
         y1: item.y1 - docOffset.y,
         x2: item.x2 - docOffset.x,
         y2: item.y2 - docOffset.y,
+        c1x: (item.c1x ?? item.x1 + (item.x2 - item.x1) * 0.33) - docOffset.x,
+        c1y: (item.c1y ?? item.y1 + (item.y2 - item.y1) * 0.33) - docOffset.y,
+        c2x: (item.c2x ?? item.x1 + (item.x2 - item.x1) * 0.67) - docOffset.x,
+        c2y: (item.c2y ?? item.y1 + (item.y2 - item.y1) * 0.67) - docOffset.y,
       };
     }
     if (item.type === "rect") return { ...item, x: item.x - docOffset.x, y: item.y - docOffset.y };
@@ -345,6 +395,84 @@ export function PaintCanvas({
       }
     }
     return null;
+  }
+
+  function findDraftLineAt(x: number, y: number) {
+    const maxDistance = 10;
+    for (const layer of draftLayers) {
+      if (!layer.visible) continue;
+      for (let i = layer.items.length - 1; i >= 0; i -= 1) {
+        const item = layer.items[i];
+        if (item.type !== "line") continue;
+        const display = toDisplayItem(item) as Extract<OverlayItem, { type: "line" }>;
+        const pts = linePoints(display);
+        let minDistance = Number.POSITIVE_INFINITY;
+        let prev = bezierPoint(0, pts);
+        for (let t = 0.05; t <= 1; t += 0.05) {
+          const next = bezierPoint(t, pts);
+          minDistance = Math.min(minDistance, distancePointToSegment(x, y, prev.x, prev.y, next.x, next.y));
+          prev = next;
+        }
+        if (minDistance <= maxDistance) {
+          return { layerId: layer.id, itemId: item.id };
+        }
+      }
+    }
+    return null;
+  }
+
+  function getSelectedLineWithPoints() {
+    if (!selectedDraftLine) return null;
+    const layer = draftLayers.find((l) => l.id === selectedDraftLine.layerId);
+    if (!layer) return null;
+    const item = layer.items.find((i) => i.id === selectedDraftLine.itemId);
+    if (!item || item.type !== "line") return null;
+    const display = toDisplayItem(item) as Extract<OverlayItem, { type: "line" }>;
+    return { layerId: layer.id, itemId: item.id, item, points: linePoints(display) };
+  }
+
+  function findLineHandleAt(x: number, y: number) {
+    const selected = getSelectedLineWithPoints();
+    if (!selected) return null;
+    const p = selected.points;
+    const handles: Array<{ handle: LineHandle; x: number; y: number }> = [
+      { handle: "start", x: p.x1, y: p.y1 },
+      { handle: "c1", x: p.c1x, y: p.c1y },
+      { handle: "c2", x: p.c2x, y: p.c2y },
+      { handle: "end", x: p.x2, y: p.y2 },
+    ];
+    const hit = handles.find((h) => Math.hypot(h.x - x, h.y - y) <= 11);
+    if (!hit) return null;
+    return { layerId: selected.layerId, itemId: selected.itemId, handle: hit.handle };
+  }
+
+  function updateLineHandle(selection: { layerId: string; itemId: string; handle: LineHandle }, docPt: { x: number; y: number }) {
+    onUpdateLayers((prev) =>
+      prev.map((layer) => {
+        if (layer.id !== selection.layerId) return layer;
+        return {
+          ...layer,
+          items: layer.items.map((item) => {
+            if (item.id !== selection.itemId || item.type !== "line") return item;
+            const next = { ...item };
+            if (selection.handle === "start") {
+              next.x1 = docPt.x;
+              next.y1 = docPt.y;
+            } else if (selection.handle === "end") {
+              next.x2 = docPt.x;
+              next.y2 = docPt.y;
+            } else if (selection.handle === "c1") {
+              next.c1x = docPt.x;
+              next.c1y = docPt.y;
+            } else if (selection.handle === "c2") {
+              next.c2x = docPt.x;
+              next.c2y = docPt.y;
+            }
+            return next;
+          }),
+        };
+      }),
+    );
   }
 
   function eraseLast() {
@@ -378,32 +506,99 @@ export function PaintCanvas({
     if (draft && activeLayer) {
       drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false);
     }
-  }, [allLayers, draft, activeLayer, selectedDraftDetector, stageW, stageH, docOffset.x, docOffset.y]);
+
+    const selectedLine = getSelectedLineWithPoints();
+    if (selectedLine) {
+      const p = selectedLine.points;
+      ctx.save();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(p.x1, p.y1);
+      ctx.lineTo(p.c1x, p.c1y);
+      ctx.moveTo(p.x2, p.y2);
+      ctx.lineTo(p.c2x, p.c2y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const handles: Array<{ x: number; y: number; active?: boolean }> = [
+        { x: p.x1, y: p.y1, active: dragLineHandle?.handle === "start" },
+        { x: p.c1x, y: p.c1y, active: dragLineHandle?.handle === "c1" },
+        { x: p.c2x, y: p.c2y, active: dragLineHandle?.handle === "c2" },
+        { x: p.x2, y: p.y2, active: dragLineHandle?.handle === "end" },
+      ];
+      for (const handle of handles) {
+        ctx.beginPath();
+        ctx.fillStyle = handle.active ? "#0ea5e9" : "#ffffff";
+        ctx.strokeStyle = "#0369a1";
+        ctx.lineWidth = 2;
+        ctx.arc(handle.x, handle.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }, [allLayers, draft, activeLayer, selectedDraftDetector, selectedDraftLine, dragLineHandle, stageW, stageH, docOffset.x, docOffset.y]);
+
+  useEffect(() => {
+    if (!selectedDraftLine) return;
+    const layer = draftLayers.find((l) => l.id === selectedDraftLine.layerId);
+    const line = layer?.items.find((item) => item.id === selectedDraftLine.itemId && item.type === "line");
+    if (!line) {
+      setSelectedDraftLine(null);
+      setDragLineHandle(null);
+    }
+  }, [draftLayers, selectedDraftLine]);
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!activeLayer) return;
-    
-    if (activeTool === "select") {
-      const pt = pointerToStage(e);
-      const hitDetector = findDraftDetectorAt(pt.x, pt.y);
-      if (hitDetector) {
-        onSelectDraftDetector(hitDetector);
+    const pt = pointerToStage(e);
+    const docPt = toDocPoint(pt);
+    const hitHandle = findLineHandleAt(pt.x, pt.y);
+    if (hitHandle) {
+      setDragLineHandle(hitHandle);
+      onSelectDraftDetector(null);
+      return;
+    }
+
+    const hitDetector = findDraftDetectorAt(pt.x, pt.y);
+    if (hitDetector) {
+      onSelectDraftDetector(hitDetector);
+      setSelectedDraftLine(null);
+      return;
+    }
+
+    const hitLine = findDraftLineAt(pt.x, pt.y);
+    if (hitLine) {
+      setSelectedDraftLine(hitLine);
+      onSelectDraftDetector(null);
+      if (activeTool === "select" || activeTool === "line") {
         return;
       }
+    }
+
+    if (activeTool === "select") {
       onSelectDraftDetector(null);
+      if (!hitLine) {
+        setSelectedDraftLine(null);
+      }
       setIsPanning(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       return;
     }
 
-    const pt = pointerToStage(e);
-    const docPt = toDocPoint(pt);
-    const hitDetector = findDraftDetectorAt(pt.x, pt.y);
-    if (hitDetector) {
-      onSelectDraftDetector(hitDetector);
-      return;
+    if (activeTool === "detector") {
+      // In detector mode, tapping an existing point should select it (not create a duplicate).
+      if (hitDetector) {
+        return;
+      }
     }
+
     onSelectDraftDetector(null);
+    if (!hitLine) {
+      setSelectedDraftLine(null);
+    }
 
     if (activeTool === "detector") {
       addToActive({
@@ -433,7 +628,17 @@ export function PaintCanvas({
     if (activeTool === "line" || activeTool === "rect") {
       setDragStart(docPt);
       if (activeTool === "line") {
-        setDraft({ type: "line", x1: docPt.x, y1: docPt.y, x2: docPt.x, y2: docPt.y });
+        setDraft({
+          type: "line",
+          x1: docPt.x,
+          y1: docPt.y,
+          x2: docPt.x,
+          y2: docPt.y,
+          c1x: docPt.x,
+          c1y: docPt.y,
+          c2x: docPt.x,
+          c2y: docPt.y,
+        });
       } else {
         setDraft({ type: "rect", x: docPt.x, y: docPt.y, w: 0, h: 0 });
       }
@@ -441,6 +646,12 @@ export function PaintCanvas({
   }
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
+    if (dragLineHandle) {
+      const docPt = toDocPoint(pointerToStage(e));
+      updateLineHandle(dragLineHandle, docPt);
+      return;
+    }
+
     if (isPanning && dragStart) {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
@@ -452,7 +663,11 @@ export function PaintCanvas({
     if (!dragStart) return;
     const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
-      setDraft({ type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y });
+      const c1x = dragStart.x + (docPt.x - dragStart.x) * 0.33;
+      const c1y = dragStart.y + (docPt.y - dragStart.y) * 0.33;
+      const c2x = dragStart.x + (docPt.x - dragStart.x) * 0.67;
+      const c2y = dragStart.y + (docPt.y - dragStart.y) * 0.67;
+      setDraft({ type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y, c1x, c1y, c2x, c2y });
       return;
     }
     if (activeTool === "rect") {
@@ -462,16 +677,39 @@ export function PaintCanvas({
   }
 
   function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
+    if (dragLineHandle) {
+      setDragLineHandle(null);
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setDragStart(null);
       return;
     }
 
+    if (!activeLayer) return;
     if (!dragStart) return;
     const docPt = toDocPoint(pointerToStage(e));
     if (activeTool === "line") {
-      addToActive({ id: crypto.randomUUID(), type: "line", x1: dragStart.x, y1: dragStart.y, x2: docPt.x, y2: docPt.y });
+      const c1x = dragStart.x + (docPt.x - dragStart.x) * 0.33;
+      const c1y = dragStart.y + (docPt.y - dragStart.y) * 0.33;
+      const c2x = dragStart.x + (docPt.x - dragStart.x) * 0.67;
+      const c2y = dragStart.y + (docPt.y - dragStart.y) * 0.67;
+      const nextLine: OverlayItem = {
+        id: crypto.randomUUID(),
+        type: "line",
+        x1: dragStart.x,
+        y1: dragStart.y,
+        x2: docPt.x,
+        y2: docPt.y,
+        c1x,
+        c1y,
+        c2x,
+        c2y,
+      };
+      addToActive(nextLine);
+      setSelectedDraftLine({ layerId: activeLayer.id, itemId: nextLine.id });
     } else if (activeTool === "rect") {
       const rect = normalizeRect(dragStart.x, dragStart.y, docPt.x, docPt.y);
       addToActive({ id: crypto.randomUUID(), type: "rect", ...rect });
@@ -650,7 +888,7 @@ export function PaintCanvas({
               ref={canvasRef}
               width={stageW}
               height={stageH}
-              className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
+              className={`absolute inset-0 z-10 h-full w-full touch-none ${canvasCursor}`}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
