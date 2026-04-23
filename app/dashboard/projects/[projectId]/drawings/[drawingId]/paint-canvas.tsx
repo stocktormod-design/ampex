@@ -27,7 +27,7 @@ const MAX_STAGE_W = 2200;
 const MAX_STAGE_H = 1600;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 6;
-const ZOOM_STEP = 0.1;
+const ZOOM_STEP = 0.25;
 
 type DraftShape =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; c1x: number; c1y: number; c2x: number; c2y: number }
@@ -214,11 +214,14 @@ export function PaintCanvas({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const touchPanStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchTapStartRef = useRef<{ x: number; y: number } | null>(null);
+  const initializedFitRef = useRef(false);
   const canvasCursor = isPanning ? "cursor-grabbing" : activeTool === "select" || dragLineHandle ? "cursor-grab" : "cursor-crosshair";
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
+    initializedFitRef.current = false;
+    setPanOffset({ x: 0, y: 0 });
 
     async function loadPdfPreview() {
       try {
@@ -321,6 +324,18 @@ export function PaintCanvas({
       }
     };
   }, [fileUrl, isPdf]);
+
+  useEffect(() => {
+    if (initializedFitRef.current) return;
+    const view = viewportRef.current;
+    if (!view || fitZoom <= 0) return;
+    if (view.clientWidth < 640) {
+      setZoomMode("fit");
+      setManualZoom(fitZoom);
+      setPanOffset({ x: 0, y: 0 });
+    }
+    initializedFitRef.current = true;
+  }, [fitZoom]);
 
   useEffect(() => {
     const view = viewportRef.current;
