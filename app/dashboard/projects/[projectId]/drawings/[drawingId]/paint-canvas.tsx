@@ -873,6 +873,38 @@ export function PaintCanvas({
       const docPt = toDocPoint(stagePt);
       touchTapStartRef.current = { x: t.clientX, y: t.clientY };
 
+      const hitHandle = findLineHandleAt(stagePt.x, stagePt.y);
+      if (hitHandle) {
+        setDragLineHandle(hitHandle);
+        setSelectedDraftItem({ layerId: hitHandle.layerId, itemId: hitHandle.itemId });
+        onSelectDraftDetector(null);
+        dragStartRef.current = null;
+        setDraft(null);
+        touchPanStartRef.current = null;
+        return;
+      }
+
+      const hitItem = findDraftItemAt(stagePt.x, stagePt.y);
+      if (hitItem) {
+        selectItem(hitItem);
+        const hitLayer = draftLayers.find((l) => l.id === hitItem.layerId);
+        const hitValue = hitLayer?.items.find((item) => item.id === hitItem.itemId);
+        if (activeTool === "line" || activeTool === "select") {
+          dragStartRef.current = null;
+          setDraft(null);
+          touchPanStartRef.current = activeTool === "select" ? { x: t.clientX, y: t.clientY } : null;
+          return;
+        }
+        if (activeTool === "detector" && hitValue?.type === "detector") {
+          dragStartRef.current = null;
+          setDraft(null);
+          touchPanStartRef.current = null;
+          return;
+        }
+      } else {
+        selectItem(null);
+      }
+
       if (activeTool === "select") {
         touchPanStartRef.current = { x: t.clientX, y: t.clientY };
       } else {
@@ -922,7 +954,10 @@ export function PaintCanvas({
       const docPt = toDocPoint(stagePt);
       const dragStart = dragStartRef.current;
 
-      if (activeTool === "line" && dragStart) {
+      if (dragLineHandle) {
+        e.preventDefault();
+        updateLineHandle(dragLineHandle, docPt);
+      } else if (activeTool === "line" && dragStart) {
         e.preventDefault();
         const c1x = dragStart.x + (docPt.x - dragStart.x) * 0.33;
         const c1y = dragStart.y + (docPt.y - dragStart.y) * 0.33;
@@ -952,6 +987,10 @@ export function PaintCanvas({
       setTouchStart(null);
     }
     if (e.touches.length === 0) {
+      if (dragLineHandle) {
+        setDragLineHandle(null);
+        return;
+      }
       const startPoint = dragStartRef.current;
       dragStartRef.current = null;
       setIsPanning(false);
