@@ -30,6 +30,14 @@ const MAX_STAGE_H = 1600;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.25;
+const TOOL_SHORTCUT_LABEL: Record<ToolId, string> = {
+  select: "1",
+  detector: "2",
+  line: "3",
+  rect: "4",
+  text: "5",
+  erase: "6",
+};
 
 type DraftShape =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; c1x: number; c1y: number; c2x: number; c2y: number }
@@ -1357,7 +1365,7 @@ export function PaintCanvas({
       <div className="pointer-events-none absolute bottom-2 left-2 z-10 sm:bottom-3 sm:left-3">
         <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm">
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
-            {activeTool}
+            {activeTool} [{TOOL_SHORTCUT_LABEL[activeTool]}]
           </span>
         </div>
       </div>

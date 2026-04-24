@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { publishOverlayItem } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
@@ -23,6 +24,29 @@ type Props = {
 };
 
 const LAYER_COLORS = ["#ef4444", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2"];
+const TOOL_KEY_BINDINGS: Record<string, ToolId> = {
+  "1": "select",
+  "2": "detector",
+  "3": "line",
+  "4": "rect",
+  "5": "text",
+  "6": "erase",
+};
+const PANEL_AUTO_OPEN_TOOLS = new Set<ToolId>(["select", "detector"]);
+const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.RSS_14,
+  Html5QrcodeSupportedFormats.RSS_EXPANDED,
+];
 
 function newLayer(index: number): OverlayLayer {
   return {
@@ -56,6 +80,7 @@ function toChecklist(value?: DetectorChecklist): DetectorChecklist {
     detectorMounted: Boolean(v.detectorMounted),
     capOn: v.capOn === "yes" || v.capOn === "no" ? v.capOn : null,
     comment: typeof v.comment === "string" ? v.comment : "",
+    serialNumber: typeof v.serialNumber === "string" ? v.serialNumber : "",
     photoDataUrl: typeof v.photoDataUrl === "string" ? v.photoDataUrl : null,
     photoPath: typeof v.photoPath === "string" ? v.photoPath : null,
     updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
@@ -100,6 +125,94 @@ function NeonCheckbox({
       />
       <span className="text-sm font-medium text-zinc-100">{label}</span>
     </label>
+  );
+}
+
+function SerialNumberField({
+  serialNumber,
+  onUpdateSerialNumber,
+}: {
+  serialNumber: string;
+  onUpdateSerialNumber: (value: string) => void;
+}) {
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerElementId = useId().replace(/:/g, "-");
+
+  async function scanFromFile(file: File | null) {
+    if (!file) return;
+    setScanError(null);
+    setScanning(true);
+    try {
+      const scanner = new Html5Qrcode(scannerElementId, {
+        verbose: false,
+        formatsToSupport: BARCODE_FORMATS,
+        useBarCodeDetectorIfSupported: true,
+      });
+      scannerRef.current = scanner;
+      const decoded = await scanner.scanFile(file, true);
+      if (!decoded || !decoded.trim()) {
+        throw new Error("Ingen strekkode funnet i bildet.");
+      }
+      onUpdateSerialNumber(decoded.trim());
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : "Kunne ikke lese strekkoden.");
+    } finally {
+      setScanning(false);
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      if (scanner) {
+        try {
+          scanner.clear();
+        } catch {}
+      }
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      if (scanner) {
+        try {
+          scanner.clear();
+        } catch {}
+      }
+    };
+  }, []);
+
+  return (
+    <div>
+      <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+        Serienummer
+      </label>
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={serialNumber}
+          onChange={(e) => onUpdateSerialNumber(e.target.value)}
+          placeholder="Skriv eller skann serienummer"
+          className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-700 transition-colors focus:border-cyan-500/50 focus:outline-none"
+        />
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200">
+          Skann strekkode fra bilde
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(e) => {
+              void scanFromFile(e.target.files?.[0] ?? null);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+        {scanning ? <p className="text-xs text-zinc-500">Skanner bilde...</p> : null}
+        {scanError ? <p className="text-xs font-semibold text-red-400">{scanError}</p> : null}
+      </div>
+      <div id={scannerElementId} className="sr-only" />
+    </div>
   );
 }
 
@@ -302,6 +415,11 @@ function PanelBody({
                     />
                   </div>
 
+                  <SerialNumberField
+                    serialNumber={checklist.serialNumber ?? ""}
+                    onUpdateSerialNumber={(value) => onUpdateChecklist({ serialNumber: value })}
+                  />
+
                   {/* Photo */}
                   <div>
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
@@ -476,6 +594,7 @@ export function PaintWorkbench({
   const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const activeToolRef = useRef<ToolId>(activeTool);
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
 
@@ -532,9 +651,29 @@ export function PaintWorkbench({
     window.localStorage.setItem(storageKey, JSON.stringify(layers));
   }, [layers, storageKey]);
 
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const tool = TOOL_KEY_BINDINGS[event.key];
+      if (!tool) return;
+      event.preventDefault();
+      setActiveTool(tool);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   /* Single-tap a detector → auto-open the status panel */
   useEffect(() => {
     if (!selectedDraftDetector) return;
+    if (!PANEL_AUTO_OPEN_TOOLS.has(activeToolRef.current)) return;
     setActiveTab("status");
     setPanelOpen(true);
   }, [selectedDraftDetector]);

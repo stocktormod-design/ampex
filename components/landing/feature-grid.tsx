@@ -1,42 +1,60 @@
-import { ClipboardList, Package, Shield } from "lucide-react";
+import { FileText, Flame, Package, Smartphone } from "lucide-react";
 
 const features = [
   {
-    title: "Prosjekt og team",
-    body: "Samme firma, roller for admin og montører — utvidet funksjonalitet planlegges.",
-    Icon: ClipboardList,
+    Icon: FileText,
+    title: "PDF-tegningseditor",
+    body: "Last opp tegninger som PDF, JPEG eller PNG. Tegn overlay med lag, kurver og rektangler direkte i nettleseren.",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10 border-blue-500/20",
   },
   {
-    title: "Lager og strekkode",
-    body: "Opprett lagre, registrer varer med strekkode fra telefon — eller skriv inn manuelt.",
+    Icon: Flame,
+    title: "Branndetektor-sjekkliste",
+    body: "Plasser detektor-punkt på tegningen, registrer sokkel, detektor og kappestatus — med foto og kommentar.",
+    color: "text-red-400",
+    bg: "bg-red-500/10 border-red-500/20",
+  },
+  {
     Icon: Package,
+    title: "Lager og strekkode",
+    body: "Opprett lagre for firma, registrer varer med strekkodeskanning fra telefon eller skriv inn manuelt.",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10 border-amber-500/20",
   },
   {
-    title: "Tilgang",
-    body: "Data i Supabase med rollebasert tilgang (RLS).",
-    Icon: Shield,
+    Icon: Smartphone,
+    title: "Mobil-first",
+    body: "Designet for montører på felt. Fungerer på telefon med touch-navigasjon, klyp for zoom og hurtigtaster.",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10 border-cyan-500/20",
   },
 ];
 
 export function FeatureGrid() {
   return (
-    <section className="border-b border-border py-14 sm:py-16">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">Funksjoner</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Fokus på det som gir verdi i hverdagen — uten unødvendig støy.
-        </p>
-        <ul className="mt-10 grid gap-6 sm:grid-cols-3">
-          {features.map(({ title, body, Icon }) => (
+    <section className="bg-zinc-950 pb-24 pt-20">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <div className="mb-12 text-center">
+          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            Alt du trenger. Ingenting du ikke trenger.
+          </h2>
+          <p className="mt-3 text-sm text-zinc-400 sm:text-base">
+            Bygget spesifikt for norske elektroentreprenører.
+          </p>
+        </div>
+
+        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {features.map(({ Icon, title, body, color, bg }) => (
             <li
               key={title}
-              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
             >
-              <div className="flex size-9 items-center justify-center rounded-md bg-muted text-foreground">
-                <Icon className="size-4" aria-hidden />
+              <div className={`inline-flex rounded-xl border p-2.5 ${bg}`}>
+                <Icon className={`h-5 w-5 ${color}`} aria-hidden />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-foreground">{title}</h3>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{body}</p>
+              <h3 className="mt-4 text-sm font-semibold text-white">{title}</h3>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-500">{body}</p>
             </li>
           ))}
         </ul>

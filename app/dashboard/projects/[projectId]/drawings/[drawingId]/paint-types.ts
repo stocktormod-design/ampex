@@ -7,6 +7,7 @@ export type DetectorChecklist = {
   comment: string;
   photoDataUrl: string | null;
   photoPath?: string | null;
+  serialNumber?: string;
   updatedAt: string | null;
 };
 
