@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DashboardNavLinks } from "@/components/dashboard-nav";
-import { SubmitButton } from "@/components/ui/submit-button";
+import { DashboardNavLinks, MobileBottomNav } from "@/components/dashboard-nav";
 import { createClient } from "@/lib/supabase/server";
 
 type ProfileRow = {
@@ -29,52 +28,82 @@ export default async function DashboardLayout({
     .maybeSingle();
 
   const profile = profileData as ProfileRow;
+
   const companyName =
-    profile?.companies && typeof profile.companies === "object" && "name" in profile.companies
+    profile?.companies && "name" in profile.companies
       ? (profile.companies as { name: string }).name
       : null;
 
-  const canManageUsers = profile?.role === "owner" || profile?.role === "admin";
+  const canViewProjects = Boolean(profile?.company_id);
+  const canManageUsers  = profile?.role === "owner" || profile?.role === "admin";
+  const canManageLager  = profile?.role === "owner" || profile?.role === "admin";
 
   async function signOut() {
     "use server";
-    const actionClient = await createClient();
-    await actionClient.auth.signOut();
+    const client = await createClient();
+    await client.auth.signOut();
     redirect("/auth/login");
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
-      <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-6">
-            <Link href="/dashboard" className="flex flex-col">
-              <span className="text-base font-semibold tracking-tight">Ampex</span>
-              {companyName ? (
-                <span className="text-xs text-muted-foreground">{companyName}</span>
-              ) : (
-                <span className="text-xs text-muted-foreground">Dashbord</span>
-              )}
-            </Link>
-            <DashboardNavLinks
-              canViewProjects={Boolean(profile?.company_id)}
-              canManageUsers={Boolean(canManageUsers)}
-              canManageLager={Boolean(canManageUsers)}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 sm:justify-end">
-            <span className="hidden max-w-[220px] truncate text-xs text-muted-foreground sm:inline">
-              {user.email}
+    <div className="flex min-h-dvh flex-col bg-background">
+      {/* ── Top bar ── */}
+      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-border/60 bg-background/95 px-4 backdrop-blur-md sm:px-6">
+        {/* Brand */}
+        <Link
+          href="/dashboard/projects"
+          className="flex shrink-0 items-center gap-2 font-bold tracking-tight text-foreground"
+        >
+          Ampex
+          {companyName && (
+            <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
+              · {companyName}
             </span>
-            <form action={signOut}>
-              <SubmitButton variant="outline" size="sm">
-                Logg ut
-              </SubmitButton>
-            </form>
-          </div>
+          )}
+        </Link>
+
+        {/* Desktop nav – center */}
+        <div className="hidden flex-1 sm:flex">
+          <DashboardNavLinks
+            canViewProjects={canViewProjects}
+            canManageUsers={canManageUsers}
+            canManageLager={canManageLager}
+          />
+        </div>
+
+        {/* Right: email + sign-out */}
+        <div className="ml-auto flex items-center gap-4">
+          <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:block">
+            {user.email}
+          </span>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Logg ut
+            </button>
+          </form>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-8">{children}</div>
+
+      {/* ── Page content ── */}
+      <main
+        className="flex-1 overflow-y-auto"
+        /* leave room for mobile bottom nav */
+        style={{ paddingBottom: "calc(3.75rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 sm:[padding-bottom:2rem]">
+          {children}
+        </div>
+      </main>
+
+      {/* ── Mobile bottom tab bar ── */}
+      <MobileBottomNav
+        canViewProjects={canViewProjects}
+        canManageLager={canManageLager}
+        canManageUsers={canManageUsers}
+      />
     </div>
   );
 }

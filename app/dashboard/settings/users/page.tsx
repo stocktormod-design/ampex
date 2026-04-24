@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { Users } from "lucide-react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { createUser } from "@/app/dashboard/settings/users/actions";
 import { DeleteUserForm } from "@/app/dashboard/settings/users/delete-user-form";
 import { createClient } from "@/lib/supabase/server";
 import { roleLabel } from "@/lib/roles";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -13,12 +13,13 @@ import { SubmitButton } from "@/components/ui/submit-button";
 export const dynamic = "force-dynamic";
 
 type UsersPageProps = {
-  searchParams?: { error?: string; success?: string };
+  searchParams?: { new?: string; error?: string; success?: string };
 };
 
 type CompanyProfile = {
   company_id: string | null;
   role: string;
+  companies?: { name: string } | null;
 };
 
 type CompanyUser = {
@@ -29,22 +30,17 @@ type CompanyUser = {
   created_at: string;
 };
 
-function roleClass(role: string) {
-  if (role === "owner") return "bg-primary/15 text-primary";
-  if (role === "admin") return "bg-secondary text-secondary-foreground";
-  if (role === "apprentice") return "border border-amber-200/80 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100";
-  return "border border-border bg-muted/50 text-muted-foreground";
+function roleColor(role: string) {
+  if (role === "owner")     return "bg-primary/10 text-primary";
+  if (role === "admin")     return "bg-secondary text-secondary-foreground";
+  if (role === "apprentice") return "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  return "bg-muted text-muted-foreground";
 }
 
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/auth/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
 
   const { data: profileData } = await supabase
     .from("profiles")
@@ -52,18 +48,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     .eq("id", user.id)
     .maybeSingle();
 
-  const profile = profileData as (CompanyProfile & { companies?: { name: string } | null }) | null;
-
-  if (!profile?.company_id) {
-    redirect("/onboarding");
-  }
-
-  if (!["owner", "admin"].includes(profile.role)) {
-    redirect("/dashboard");
-  }
+  const profile = profileData as CompanyProfile | null;
+  if (!profile?.company_id) redirect("/onboarding");
+  if (!["owner", "admin"].includes(profile.role)) redirect("/dashboard/projects");
 
   const companyName =
-    profile.companies && typeof profile.companies === "object" && "name" in profile.companies
+    profile.companies && "name" in profile.companies
       ? (profile.companies as { name: string }).name
       : null;
 
@@ -74,57 +64,55 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     .order("created_at", { ascending: true });
   const users = (usersData ?? []) as CompanyUser[];
 
-  function mayDelete(target: CompanyUser, myId: string, myRole: string): boolean {
-    if (target.id === myId) return false;
-    const t = target.role === "worker" ? "montor" : target.role;
-    if (t === "owner") return false;
-    if (myRole === "owner") return true;
-    if (myRole === "admin") return t === "montor" || t === "apprentice";
+  function mayDelete(target: CompanyUser): boolean {
+    if (target.id === user!.id) return false;
+    if (target.role === "owner") return false;
+    if (profile!.role === "owner") return true;
+    if (profile!.role === "admin") return target.role === "montor" || target.role === "apprentice";
     return false;
   }
 
-  const viewerId = user.id;
-  const viewerRole = profile.role;
+  const showForm = searchParams?.new === "1";
 
   return (
-    <main className="space-y-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex gap-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Users className="size-6" aria-hidden />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Brukere</h1>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Owner og admin kan legge til og slette brukere i{" "}
-              <span className="font-medium text-foreground">{companyName ?? "firmaet"}</span>.
-            </p>
-          </div>
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Team</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {companyName ?? "Firma"} · {users.length} bruker{users.length === 1 ? "" : "e"}
+          </p>
         </div>
+        <Link
+          href={showForm ? "/dashboard/settings/users" : "/dashboard/settings/users?new=1"}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+        >
+          <Plus className="size-4" aria-hidden />
+          Ny bruker
+        </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="border shadow-sm lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Ny bruker</CardTitle>
-            <CardDescription>E-post og passord som den nye brukeren logger inn med.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createUser} className="space-y-4">
+      {/* ── Create form (collapsible) ── */}
+      {showForm && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold">Ny bruker</h2>
+          <form action={createUser} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <NativeLabel htmlFor="full_name">Fullt navn</NativeLabel>
-                <NativeInput id="full_name" name="full_name" required autoComplete="name" />
+                <NativeLabel htmlFor="full_name">Fullt navn *</NativeLabel>
+                <NativeInput id="full_name" name="full_name" required autoComplete="name" autoFocus />
               </div>
               <div className="space-y-2">
                 <NativeLabel htmlFor="phone">Telefon</NativeLabel>
                 <NativeInput id="phone" name="phone" type="tel" autoComplete="tel" />
               </div>
               <div className="space-y-2">
-                <NativeLabel htmlFor="email">E-post</NativeLabel>
+                <NativeLabel htmlFor="email">E-post *</NativeLabel>
                 <NativeInput id="email" name="email" type="email" required autoComplete="off" />
               </div>
               <div className="space-y-2">
-                <NativeLabel htmlFor="password">Passord</NativeLabel>
+                <NativeLabel htmlFor="password">Passord *</NativeLabel>
                 <NativeInput
                   id="password"
                   name="password"
@@ -134,87 +122,99 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                   autoComplete="new-password"
                 />
               </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="role">Rolle</NativeLabel>
-                <select
-                  id="role"
-                  name="role"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  defaultValue="montor"
-                >
-                  <option value="montor">Montør</option>
-                  <option value="apprentice">Lærling</option>
-                  <option value="admin">Admin</option>
-                  {profile.role === "owner" ? <option value="owner">Owner</option> : null}
-                </select>
-              </div>
-              {searchParams?.error ? (
-                <Alert variant="destructive">
-                  <AlertDescription>{searchParams.error}</AlertDescription>
-                </Alert>
-              ) : null}
-              {searchParams?.success === "deleted" ? (
-                <Alert>
-                  <AlertDescription>Brukeren ble slettet.</AlertDescription>
-                </Alert>
-              ) : null}
-              {searchParams?.success === "1" ? (
-                <Alert>
-                  <AlertDescription>Bruker ble opprettet.</AlertDescription>
-                </Alert>
-              ) : null}
-              <SubmitButton>Opprett bruker</SubmitButton>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-sm lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="text-lg">Team</CardTitle>
-            <CardDescription>
-              {users.length} bruker{users.length === 1 ? "" : "e"}. Admin kan slette montør og lærling; owner kan også
-              slette admin. Owner-kontoer kan ikke slettes her.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y border-t">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                <span>Navn</span>
-                <span className="text-right">Rolle</span>
-                <span className="text-right">Handling</span>
-              </div>
-              {users.map((u) => (
-                <div
-                  key={u.id}
-                  className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{u.full_name?.trim() || "Uten navn"}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {u.phone?.trim() || "—"}
-                    </p>
-                  </div>
-                  <span
-                    className={`inline-flex justify-self-end rounded-full px-2.5 py-0.5 text-xs font-medium ${roleClass(u.role)}`}
-                  >
-                    {roleLabel(u.role)}
-                  </span>
-                  <div className="justify-self-end">
-                    <DeleteUserForm
-                      userId={u.id}
-                      displayName={u.full_name?.trim() || "Uten navn"}
-                      disabled={!mayDelete(u, viewerId, viewerRole)}
-                    />
-                  </div>
-                </div>
-              ))}
             </div>
-            {users.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">Ingen brukere ennå.</p>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+            <div className="space-y-2">
+              <NativeLabel htmlFor="role">Rolle</NativeLabel>
+              <select
+                id="role"
+                name="role"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                defaultValue="montor"
+              >
+                <option value="montor">Montør</option>
+                <option value="apprentice">Lærling</option>
+                <option value="admin">Admin</option>
+                {profile.role === "owner" && <option value="owner">Owner</option>}
+              </select>
+            </div>
+
+            {searchParams?.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{searchParams.error}</AlertDescription>
+              </Alert>
+            )}
+            {searchParams?.success === "1" && (
+              <Alert>
+                <AlertDescription>Bruker ble opprettet.</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex items-center gap-3">
+              <SubmitButton>Opprett bruker</SubmitButton>
+              <Link
+                href="/dashboard/settings/users"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Avbryt
+              </Link>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Feedback (outside form) ── */}
+      {searchParams?.success === "deleted" && !showForm && (
+        <Alert>
+          <AlertDescription>Brukeren ble slettet.</AlertDescription>
+        </Alert>
+      )}
+
+      {/* ── Users list ── */}
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
+          <p className="text-sm text-muted-foreground">Ingen brukere ennå.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          {users.map((u) => (
+            <li key={u.id} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+              {/* Avatar initials */}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
+                {(u.full_name?.trim()[0] ?? "?").toUpperCase()}
+              </div>
+
+              {/* Info */}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-foreground">
+                  {u.full_name?.trim() || "Uten navn"}
+                  {u.id === user.id && (
+                    <span className="ml-2 text-xs text-muted-foreground">(deg)</span>
+                  )}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {u.phone?.trim() || "—"}
+                </p>
+              </div>
+
+              {/* Role badge */}
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${roleColor(u.role)}`}
+              >
+                {roleLabel(u.role)}
+              </span>
+
+              {/* Delete */}
+              <div className="shrink-0">
+                <DeleteUserForm
+                  userId={u.id}
+                  displayName={u.full_name?.trim() || "Uten navn"}
+                  disabled={!mayDelete(u)}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Package } from "lucide-react";
+import { Plus, ChevronRight, Package } from "lucide-react";
 import { createWarehouse } from "@/app/dashboard/lager/actions";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminRole } from "@/lib/roles";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -12,18 +11,13 @@ import { SubmitButton } from "@/components/ui/submit-button";
 export const dynamic = "force-dynamic";
 
 type LagerPageProps = {
-  searchParams?: { error?: string };
+  searchParams?: { new?: string; error?: string };
 };
 
 export default async function LagerPage({ searchParams }: LagerPageProps) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/auth/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
 
   const { data: profileData } = await supabase
     .from("profiles")
@@ -32,13 +26,8 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
     .maybeSingle();
   const profile = profileData as { company_id: string | null; role: string } | null;
 
-  if (!profile?.company_id) {
-    redirect("/onboarding");
-  }
-
-  if (!isAdminRole(profile.role)) {
-    redirect("/dashboard");
-  }
+  if (!profile?.company_id) redirect("/onboarding");
+  if (!isAdminRole(profile.role)) redirect("/dashboard/projects");
 
   const { data: warehouses } = await supabase
     .from("warehouses")
@@ -50,84 +39,109 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
     id: string;
     name: string;
     location: string | null;
-    created_at: string;
   }[];
 
+  const showForm = searchParams?.new === "1";
+
   return (
-    <main className="space-y-8">
-      <div className="flex gap-4">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Package className="size-6" aria-hidden />
-        </div>
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Lager</h1>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Admin oppretter lagre (f.eks. båtlager). I hvert lager registreres varer med strekkode
-            (skann eller skriv), og kan redigeres manuelt uten kamera.
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Lager</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {rows.length} lager{rows.length === 1 ? "" : " totalt"}
           </p>
         </div>
+        <Link
+          href={showForm ? "/dashboard/lager" : "/dashboard/lager?new=1"}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+        >
+          <Plus className="size-4" aria-hidden />
+          Nytt
+        </Link>
       </div>
 
-      {searchParams?.error ? (
-        <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      {/* ── Error ── */}
+      {searchParams?.error && (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {searchParams.error}
         </p>
-      ) : null}
+      )}
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <Card className="border shadow-sm lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Dine lagre</CardTitle>
-            <CardDescription>
-              {rows.length} lager{rows.length === 1 ? "" : " totalt"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Ingen lagre ennå. Opprett det første i skjemaet under (eller til høyre på store
-                skjermer).
-              </p>
-            ) : (
-              <ul className="divide-y rounded-lg border">
-                {rows.map((w) => (
-                  <li key={w.id}>
-                    <Link
-                      href={`/dashboard/lager/${w.id}`}
-                      className="flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/50"
-                    >
-                      <span className="font-medium">{w.name}</span>
-                      {w.location ? (
-                        <span className="text-xs text-muted-foreground">{w.location}</span>
-                      ) : null}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-sm lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-lg">Nytt lager</CardTitle>
-            <CardDescription>F.eks. «Båtlager», «Kontor», «Bil 12».</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createWarehouse} className="space-y-4">
+      {/* ── Create form (collapsible) ── */}
+      {showForm && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold">Nytt lager</h2>
+          <form action={createWarehouse} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <NativeLabel htmlFor="name">Navn</NativeLabel>
-                <NativeInput id="name" name="name" required placeholder="Båtlager" autoComplete="off" />
+                <NativeLabel htmlFor="name">Navn *</NativeLabel>
+                <NativeInput
+                  id="name"
+                  name="name"
+                  required
+                  placeholder="Båtlager"
+                  autoComplete="off"
+                  autoFocus
+                />
               </div>
               <div className="space-y-2">
-                <NativeLabel htmlFor="location">Plassering (valgfritt)</NativeLabel>
+                <NativeLabel htmlFor="location">Plassering</NativeLabel>
                 <NativeInput id="location" name="location" placeholder="Kaia 4" autoComplete="off" />
               </div>
-              <SubmitButton className="w-full">Opprett lager</SubmitButton>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+            </div>
+            <div className="flex items-center gap-3">
+              <SubmitButton>Opprett lager</SubmitButton>
+              <Link
+                href="/dashboard/lager"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Avbryt
+              </Link>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Warehouse list ── */}
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
+          <Package className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
+          <p className="text-sm font-medium text-muted-foreground">Ingen lagre ennå.</p>
+          {!showForm && (
+            <Link
+              href="/dashboard/lager?new=1"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              <Plus className="size-3.5" />
+              Opprett det første
+            </Link>
+          )}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          {rows.map((w) => (
+            <li key={w.id}>
+              <Link
+                href={`/dashboard/lager/${w.id}`}
+                className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:px-5"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <Package className="size-4 text-muted-foreground" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-foreground">{w.name}</p>
+                  {w.location && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{w.location}</p>
+                  )}
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
