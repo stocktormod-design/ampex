@@ -1177,81 +1177,129 @@ export function PaintCanvas({
 
   return (
     <section className="relative h-full min-h-0 min-w-0 flex-1 bg-zinc-950 text-zinc-100">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 sm:inset-x-3 sm:top-3">
-        <div className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-950/95 px-2 py-1.5 shadow-xl backdrop-blur-md sm:gap-1.5 sm:px-3">
-          <p className="mr-1 max-w-[10rem] truncate text-xs font-semibold text-zinc-300 sm:max-w-[18rem] sm:text-sm">{drawingName}</p>
-          <button
-            type="button"
-            onClick={decreaseZoom}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
-            title="Zoom ut"
-          >
-            −
-          </button>
-          <span className="w-11 text-center text-[11px] font-bold tabular-nums text-zinc-300 sm:w-14 sm:text-xs">{Math.round(zoom * 100)}%</span>
-          <button
-            type="button"
-            onClick={increaseZoom}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
-            title="Zoom inn"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={resetView}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 sm:text-xs"
-            title="Tilbakestill visning (1.5x)"
-          >
-            ⌖
-          </button>
-          <button
-            type="button"
-            onClick={fitToViewport}
-            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all sm:text-xs ${
-              zoomMode === "fit"
-                ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.12)]"
-                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-            }`}
-            title="Tilpass vindu"
-          >
-            Fit
-          </button>
-          {selectedDraftItem ? (
+      {/* ── Top bar ── */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 sm:inset-x-3 sm:top-2.5">
+        <div className="pointer-events-auto flex max-w-full items-center gap-0 rounded-xl border border-zinc-800/80 bg-zinc-950/96 shadow-xl backdrop-blur-md">
+
+          {/* Drawing name */}
+          <div className="flex min-w-0 items-center pl-3 pr-2">
+            <p className="max-w-[8rem] truncate text-[11px] font-semibold text-zinc-300 sm:max-w-[16rem] sm:text-xs">
+              {drawingName}
+            </p>
+          </div>
+
+          {/* Separator */}
+          <div className="mx-0.5 h-5 w-px shrink-0 bg-zinc-800" />
+
+          {/* Zoom group */}
+          <div className="flex items-center">
             <button
               type="button"
-              onClick={deleteSelectedItem}
-              className="rounded-lg border border-red-500/40 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-red-400 transition-colors hover:border-red-500/60 hover:bg-red-500/10 sm:text-xs"
-              title="Slett valgt element"
+              onClick={decreaseZoom}
+              title="Zoom ut (scroll ned)"
+              className="flex h-9 w-8 items-center justify-center rounded-l-lg text-sm font-bold text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200 active:scale-95"
             >
-              <span className="sm:hidden">🗑</span>
-              <span className="hidden sm:inline">Slett</span>
+              −
             </button>
-          ) : null}
-          {onTogglePanel ? (
             <button
               type="button"
-              onClick={onTogglePanel}
-              className={`hidden items-center rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all sm:flex sm:text-xs ${
-                panelOpen
-                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.12)]"
-                  : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+              onClick={fitToViewport}
+              title="Tilpass til vindu"
+              className={`flex h-9 min-w-[3.5rem] items-center justify-center text-[11px] font-bold tabular-nums transition-all sm:text-xs ${
+                zoomMode === "fit"
+                  ? "bg-cyan-500/10 text-cyan-300"
+                  : "text-zinc-300 hover:bg-zinc-800/50 hover:text-zinc-100"
               }`}
-              title={panelOpen ? "Skjul panel" : "Vis panel"}
             >
-              {panelOpen ? "Skjul" : "Panel"}
+              {Math.round(zoom * 100)}%
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={increaseZoom}
+              title="Zoom inn (scroll opp)"
+              className="flex h-9 w-8 items-center justify-center rounded-r-lg text-sm font-bold text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200 active:scale-95"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Separator */}
+          <div className="mx-0.5 h-5 w-px shrink-0 bg-zinc-800" />
+
+          {/* Fit + Reset */}
+          <div className="flex items-center gap-0.5 px-1">
+            <button
+              type="button"
+              onClick={fitToViewport}
+              title="Tilpass til vindu"
+              className={`flex h-9 items-center rounded-lg px-2.5 text-[11px] font-bold transition-all sm:text-xs ${
+                zoomMode === "fit"
+                  ? "text-cyan-300"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              onClick={resetView}
+              title="Tilbakestill zoom (1.5×)"
+              className="flex h-9 items-center rounded-lg px-2 text-[11px] font-bold text-zinc-600 transition-colors hover:text-zinc-300 sm:text-xs"
+            >
+              ⌖
+            </button>
+          </div>
+
+          {/* Delete (when item selected) */}
+          {selectedDraftItem && (
+            <>
+              <div className="mx-0.5 h-5 w-px shrink-0 bg-zinc-800" />
+              <button
+                type="button"
+                onClick={deleteSelectedItem}
+                title="Slett valgt element (Delete)"
+                className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 sm:text-xs"
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 2h4M2 4h12m-1.5 0-.75 9.5A1.5 1.5 0 0110.25 15h-4.5A1.5 1.5 0 014.25 13.5L3.5 4" />
+                </svg>
+                <span className="hidden sm:inline">Slett</span>
+              </button>
+            </>
+          )}
+
+          {/* Panel toggle – desktop only */}
+          {onTogglePanel && (
+            <>
+              <div className="mx-0.5 hidden h-5 w-px shrink-0 bg-zinc-800 sm:block" />
+              <button
+                type="button"
+                onClick={onTogglePanel}
+                title={panelOpen ? "Skjul panel" : "Vis panel"}
+                className={`hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold transition-all sm:flex sm:text-xs ${
+                  panelOpen
+                    ? "text-cyan-300"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2 2h12a1 1 0 011 1v10a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1zm7 0v12" />
+                </svg>
+                {panelOpen ? "Skjul" : "Panel"}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* ── Canvas viewport ── */}
       <div
         ref={viewportRef}
         onWheel={onWheel}
         className="relative h-full w-full touch-none overflow-hidden bg-zinc-950"
       >
         <div
-          className="absolute left-1/2 top-1/2 overflow-hidden rounded-md border border-zinc-700 bg-white shadow-xl"
+          className="absolute left-1/2 top-1/2 overflow-hidden rounded-sm border border-zinc-700/80 bg-white shadow-2xl"
           style={{
             width: `${Math.round(stageW * zoom)}px`,
             height: `${Math.round(stageH * zoom)}px`,
@@ -1302,6 +1350,15 @@ export function PaintCanvas({
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           />
+        </div>
+      </div>
+
+      {/* ── Active tool indicator – bottom-left corner ── */}
+      <div className="pointer-events-none absolute bottom-2 left-2 z-10 sm:bottom-3 sm:left-3">
+        <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+            {activeTool}
+          </span>
         </div>
       </div>
     </section>
