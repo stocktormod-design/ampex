@@ -38,6 +38,7 @@ export default async function DashboardLayout({
   const canViewProjects = Boolean(profile?.company_id);
   const canManageUsers  = profile?.role === "owner" || profile?.role === "admin";
   const canManageLager  = profile?.role === "owner" || profile?.role === "admin";
+  const canViewInstallerInbox = profile?.role === "installator" || profile?.role === "owner" || profile?.role === "admin";
 
   async function signOut() {
     "use server";
@@ -69,6 +70,7 @@ export default async function DashboardLayout({
             canViewProjects={canViewProjects}
             canManageUsers={canManageUsers}
             canManageLager={canManageLager}
+            canViewInstallerInbox={canViewInstallerInbox}
           />
         </div>
 
@@ -107,6 +109,7 @@ export default async function DashboardLayout({
         canViewProjects={canViewProjects}
         canManageLager={canManageLager}
         canManageUsers={canManageUsers}
+        canViewInstallerInbox={canViewInstallerInbox}
         signOut={signOut}
       />
     </div>

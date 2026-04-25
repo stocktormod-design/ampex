@@ -126,6 +126,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
               >
                 <option value="montor">Montør</option>
                 <option value="apprentice">Lærling</option>
+                <option value="installator">Installatør</option>
                 <option value="admin">Admin</option>
                 {profile.role === "owner" && <option value="owner">Owner</option>}
               </select>

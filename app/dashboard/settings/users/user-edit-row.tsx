@@ -19,6 +19,7 @@ type Props = {
 const ROLES = [
   { value: "montor", label: "Montør" },
   { value: "apprentice", label: "Lærling" },
+  { value: "installator", label: "Installatør" },
   { value: "admin", label: "Admin" },
   { value: "owner", label: "Owner" },
 ] as const;
@@ -26,6 +27,7 @@ const ROLES = [
 function roleColor(role: string) {
   if (role === "owner") return "bg-primary/10 text-primary";
   if (role === "admin") return "bg-secondary text-secondary-foreground";
+  if (role === "installator") return "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300";
   if (role === "apprentice") return "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
   return "bg-muted text-muted-foreground";
 }

@@ -139,7 +139,7 @@ function canDeleteUser(deleterRole: string, targetRole: string): boolean {
   const t = targetRole === "worker" ? "montor" : targetRole;
   if (t === "owner") return false;
   if (deleterRole === "owner") return true;
-  if (deleterRole === "admin") return t === "montor" || t === "apprentice";
+  if (deleterRole === "admin") return t === "montor" || t === "apprentice" || t === "installator";
   return false;
 }
 

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FolderKanban,
+  ClipboardList,
   Package,
   BookOpen,
   LayoutGrid,
@@ -20,6 +21,7 @@ type BaseNavProps = {
   canViewProjects: boolean;
   canManageUsers: boolean;
   canManageLager: boolean;
+  canViewInstallerInbox: boolean;
 };
 
 type MobileNavProps = BaseNavProps & {
@@ -31,6 +33,8 @@ type NavItem = { href: string; label: string; exact?: boolean };
 function buildDesktopLinks(props: BaseNavProps): NavItem[] {
   const links: NavItem[] = [{ href: "/dashboard", label: "Hjem", exact: true }];
   if (props.canViewProjects) links.push({ href: "/dashboard/projects", label: "Prosjekter" });
+  if (props.canViewProjects) links.push({ href: "/dashboard/ordre", label: "Ordre" });
+  if (props.canViewInstallerInbox) links.push({ href: "/dashboard/installator/inbox", label: "Innboks" });
   links.push({ href: "/dashboard/protokoller", label: "Protokoller" });
   if (props.canManageLager) links.push({ href: "/dashboard/lager", label: "Lager" });
   if (props.canManageUsers) links.push({ href: "/dashboard/settings/users", label: "Brukere" });
@@ -68,7 +72,6 @@ export function DashboardNavLinks(props: BaseNavProps) {
 
 /* ── Mobile bottom tab bar ── */
 const PRIMARY_TABS = [
-  { href: "/dashboard/projects",    label: "Prosjekter",  Icon: FolderKanban },
   { href: "/dashboard/lager",       label: "Lager",       Icon: Package      },
   { href: "/dashboard/protokoller", label: "Protokoller", Icon: BookOpen     },
 ];
@@ -76,8 +79,30 @@ const PRIMARY_TABS = [
 export function MobileBottomNav(props: MobileNavProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [projectsMode, setProjectsMode] = useState<"projects" | "ordre">("projects");
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTriggeredRef = useRef(false);
+
+  const projectTab =
+    projectsMode === "projects"
+      ? { href: "/dashboard/projects", label: "Prosjekter", Icon: FolderKanban }
+      : { href: "/dashboard/ordre", label: "Ordre", Icon: ClipboardList };
+  const tabs = [projectTab, ...PRIMARY_TABS];
 
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("dashboard:mobile-projects-mode");
+    if (stored === "ordre" || stored === "projects") {
+      setProjectsMode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dashboard:mobile-projects-mode", projectsMode);
+  }, [projectsMode]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -86,8 +111,30 @@ export function MobileBottomNav(props: MobileNavProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
-  const onPrimaryTab = PRIMARY_TABS.some((t) => pathname.startsWith(t.href));
+  const onPrimaryTab = tabs.some((t) => pathname.startsWith(t.href));
   const isMoreActive = !onPrimaryTab;
+
+  function startHoldSwap() {
+    holdTriggeredRef.current = false;
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = setTimeout(() => {
+      holdTriggeredRef.current = true;
+      setProjectsMode((prev) => {
+        const next = prev === "projects" ? "ordre" : "projects";
+        if (typeof window !== "undefined") {
+          window.location.href = next === "projects" ? "/dashboard/projects" : "/dashboard/ordre";
+        }
+        return next;
+      });
+    }, 500);
+  }
+
+  function endHoldSwap() {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
 
   return (
     <>
@@ -162,6 +209,21 @@ export function MobileBottomNav(props: MobileNavProps) {
               </li>
             )}
 
+            {props.canViewInstallerInbox && (
+              <li className="border-t border-border/60">
+                <Link
+                  href="/dashboard/installator/inbox"
+                  className={`flex items-center gap-3 px-4 py-3.5 text-sm font-medium transition-colors hover:bg-muted/60 ${
+                    pathname.startsWith("/dashboard/installator/inbox") ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <ClipboardList className="size-5 shrink-0" />
+                  <span className="flex-1">Installatør innboks</span>
+                  <ChevronRight className="size-4 text-muted-foreground/40" />
+                </Link>
+              </li>
+            )}
+
             <li className="border-t border-border/60">
               <form action={props.signOut}>
                 <button
@@ -184,12 +246,22 @@ export function MobileBottomNav(props: MobileNavProps) {
         aria-label="Navigasjon"
       >
         <div className="flex h-[3.75rem] items-stretch">
-          {PRIMARY_TABS.map(({ href, label, Icon }) => {
+          {tabs.map(({ href, label, Icon }, index) => {
             const isActive = pathname.startsWith(href);
             return (
               <Link
                 key={href}
                 href={href}
+                onPointerDown={index === 0 ? startHoldSwap : undefined}
+                onPointerUp={index === 0 ? endHoldSwap : undefined}
+                onPointerCancel={index === 0 ? endHoldSwap : undefined}
+                onPointerLeave={index === 0 ? endHoldSwap : undefined}
+                onClick={index === 0 ? (e) => {
+                  if (holdTriggeredRef.current) {
+                    e.preventDefault();
+                    holdTriggeredRef.current = false;
+                  }
+                } : undefined}
                 className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
                   isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}

@@ -1,4 +1,4 @@
-export const APP_ROLES = ["owner", "admin", "montor", "apprentice"] as const;
+export const APP_ROLES = ["owner", "admin", "installator", "montor", "apprentice"] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export function isAdminRole(role: string): boolean {
@@ -11,6 +11,8 @@ export function roleLabel(role: string): string {
       return "Owner";
     case "admin":
       return "Admin";
+    case "installator":
+      return "Installatør";
     case "montor":
     case "worker":
       return "Montør";
