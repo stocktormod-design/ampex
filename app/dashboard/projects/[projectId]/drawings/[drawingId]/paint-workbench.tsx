@@ -789,6 +789,8 @@ export function PaintWorkbench({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [selectedDraftItemId, setSelectedDraftItemId] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [inlinePublishVisibility, setInlinePublishVisibility] = useState<OverlayVisibility>("all");
   const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -953,6 +955,15 @@ export function PaintWorkbench({
     }
     return out;
   }, [layers]);
+
+  const inlinePublishRow = useMemo(() => {
+    if (!selectedDraftItemId) return null;
+    return (
+      draftRows.find(
+        (row) => row.layerId === selectedDraftItemId.layerId && row.item.id === selectedDraftItemId.itemId,
+      ) ?? null
+    );
+  }, [selectedDraftItemId, draftRows]);
 
   const selectedDraftDetectorItem = useMemo(() => {
     if (!selectedDraftDetector) return null;
@@ -1130,6 +1141,51 @@ export function PaintWorkbench({
     });
   }
 
+  function publishInlineItem() {
+    if (!inlinePublishRow) return;
+    const row = inlinePublishRow;
+    setPublishError(null);
+    startTransition(async () => {
+      const result = await publishOverlayItem({
+        drawingId,
+        toolType: row.item.type,
+        layerName: row.layerName,
+        layerColor: row.layerColor,
+        visibilityScope: inlinePublishVisibility,
+        payload: row.item,
+      });
+      if (!result.ok) {
+        setPublishError(result.error);
+        return;
+      }
+      const data = result.data as {
+        id: string;
+        drawing_id: string;
+        created_by: string;
+        tool_type: ToolId;
+        layer_name: string;
+        layer_color: string;
+        payload: OverlayItem;
+        visibility_scope: OverlayVisibility;
+      };
+      setPublishedOverlays((prev) => [
+        ...prev,
+        {
+          id: data.id,
+          drawingId: data.drawing_id,
+          createdBy: data.created_by,
+          toolType: data.tool_type,
+          layerName: data.layer_name,
+          layerColor: data.layer_color,
+          payload: data.payload,
+          visibilityScope: data.visibility_scope,
+        },
+      ]);
+      removeDraftRow(row);
+      setSelectedDraftItemId(null);
+    });
+  }
+
   const checklist =
     selectedDraftDetectorItem?.item.type === "detector"
       ? toChecklist(selectedDraftDetectorItem.item.checklist)
@@ -1214,6 +1270,14 @@ export function PaintWorkbench({
               setActiveTab("status");
               setPanelOpen(true);
             }}
+            onPinchZoom={() => setActiveTool("select")}
+            onSelectDraftItem={(sel) => setSelectedDraftItemId(sel)}
+            inlinePublish={inlinePublishRow ? {
+              visibility: inlinePublishVisibility,
+              onSetVisibility: setInlinePublishVisibility,
+              onPublish: publishInlineItem,
+              pending,
+            } : null}
           />
         </div>
 

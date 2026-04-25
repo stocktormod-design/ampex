@@ -634,7 +634,7 @@ export async function setProjectBlueprintAccess(formData: FormData) {
     redirect("/dashboard/projects?error=Mangler+prosjekt");
   }
 
-  const { companyId, adminClient } = await requireAdminContext();
+  const { companyId, adminClient, userId } = await requireAdminContext();
   const projectCheck = await ensureProjectInCompany(adminClient, projectId, companyId);
   if (!projectCheck.ok) {
     redirectProjectError(projectId, projectCheck.error);
@@ -659,18 +659,30 @@ export async function setProjectBlueprintAccess(formData: FormData) {
     validIds = (validRows ?? []).map((r) => (r as { id: string }).id);
   }
 
-  const { error: delErr } = await adminClient.from("project_blueprint_access").delete().eq("project_id", projectId);
-  if (delErr) {
-    redirectProjectError(projectId, delErr.message);
-  }
+  // Clear existing blueprint access and project assignments in sync
+  const { error: delBpErr } = await adminClient
+    .from("project_blueprint_access")
+    .delete()
+    .eq("project_id", projectId);
+  if (delBpErr) redirectProjectError(projectId, delBpErr.message);
+
+  const { error: delAssignErr } = await adminClient
+    .from("project_assignments")
+    .delete()
+    .eq("project_id", projectId);
+  if (delAssignErr) redirectProjectError(projectId, delAssignErr.message);
 
   if (validIds.length > 0) {
-    const { error: insErr } = await adminClient.from("project_blueprint_access").insert(
-      validIds.map((user_id) => ({ project_id: projectId, user_id })),
-    );
-    if (insErr) {
-      redirectProjectError(projectId, insErr.message);
-    }
+    const { error: insBpErr } = await adminClient
+      .from("project_blueprint_access")
+      .insert(validIds.map((user_id) => ({ project_id: projectId, user_id })));
+    if (insBpErr) redirectProjectError(projectId, insBpErr.message);
+
+    // Grant project_assignments so users can actually see the project in their list
+    const { error: insAssignErr } = await adminClient
+      .from("project_assignments")
+      .insert(validIds.map((user_id) => ({ project_id: projectId, user_id, assigned_by: userId })));
+    if (insAssignErr) redirectProjectError(projectId, insAssignErr.message);
   }
 
   revalidatePath(projectPath(projectId));

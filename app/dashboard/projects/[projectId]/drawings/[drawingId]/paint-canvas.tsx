@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent, type WheelEvent } from "react";
-import type { OverlayItem, OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type { OverlayItem, OverlayLayer, OverlayVisibility, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
   fileUrl: string;
@@ -17,6 +17,14 @@ type Props = {
   panelOpen?: boolean;
   onTogglePanel?: () => void;
   onOpenStatusPanel?: () => void;
+  onPinchZoom?: () => void;
+  onSelectDraftItem?: (sel: { layerId: string; itemId: string } | null) => void;
+  inlinePublish?: {
+    visibility: OverlayVisibility;
+    onSetVisibility: (v: OverlayVisibility) => void;
+    onPublish: () => void;
+    pending: boolean;
+  } | null;
 };
 
 function fileExt(path: string): string {
@@ -233,6 +241,9 @@ export function PaintCanvas({
   panelOpen,
   onTogglePanel,
   onOpenStatusPanel,
+  onPinchZoom,
+  onSelectDraftItem,
+  inlinePublish,
 }: Props) {
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
   const [manualZoom, setManualZoom] = useState(1);
@@ -527,6 +538,7 @@ export function PaintCanvas({
 
   function selectItem(selection: ItemSelection | null) {
     setSelectedDraftItem(selection);
+    onSelectDraftItem?.(selection);
     if (!selection) {
       setSelectedDraftLine(null);
       onSelectDraftDetector(null);
@@ -725,6 +737,7 @@ export function PaintCanvas({
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (e.pointerType === "touch") return;
+    if (e.button !== 0) return;
     if (!activeLayer) return;
     const pt = pointerToStage(e);
     const docPt = toDocPoint(pt);
@@ -945,6 +958,7 @@ export function PaintCanvas({
       const cy = (t0.clientY + t1.clientY) / 2;
       setTouchStart({ dist, zoom: manualZoom, cx, cy });
       setZoomMode("manual");
+      onPinchZoom?.();
       touchTapStartRef.current = null;
       touchPanStartRef.current = null;
       dragStartRef.current = null;
@@ -1381,6 +1395,31 @@ export function PaintCanvas({
               ⌖
             </button>
           </div>
+
+          {/* Inline publish (when draft item selected) */}
+          {selectedDraftItem && inlinePublish && (
+            <>
+              <div className="mx-0.5 h-5 w-px shrink-0 bg-zinc-800" />
+              <div className="flex items-center gap-1 px-1">
+                <select
+                  value={inlinePublish.visibility}
+                  onChange={(e) => inlinePublish.onSetVisibility(e.target.value as OverlayVisibility)}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 text-[10px] font-semibold text-zinc-300 focus:outline-none"
+                >
+                  <option value="all">Alle</option>
+                  <option value="admins">Kun admin</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={inlinePublish.pending}
+                  onClick={inlinePublish.onPublish}
+                  className="flex h-7 items-center rounded-lg bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-40"
+                >
+                  Publiser
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Delete (when item selected) */}
           {selectedDraftItem && (
