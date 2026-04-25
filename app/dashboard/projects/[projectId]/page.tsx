@@ -226,9 +226,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
       {/* ── Tegningstilgang (admin) ── */}
       {isAdmin && companyProfiles.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-semibold">Tegningstilgang</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+        <details className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <summary className="cursor-pointer list-none text-base font-semibold">
+            Tegningstilgang
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(klikk for aa utvide)</span>
+          </summary>
+          <p className="mt-3 text-sm text-muted-foreground">
             Velg hvilke brukere som får se <span className="font-medium text-foreground">publiserte</span> tegninger på
             dette prosjektet. Administratorer ser alltid alt. La alle bokser stå <span className="font-medium text-foreground">av</span> for å
             tillate alle som allerede har prosjekttilgang (tildelt i prosjektet).
@@ -256,7 +259,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             </ul>
             <SubmitButton variant="outline">Lagre tegningstilgang</SubmitButton>
           </form>
-        </div>
+        </details>
       )}
 
       {/* ── Status change (admin) ── */}

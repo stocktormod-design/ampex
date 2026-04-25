@@ -264,7 +264,12 @@ type PanelBodyProps = {
   publishError: string | null;
   onPublishOne: (row: DraftPublishRow) => void;
   onPublishAll: () => void;
+  onPublishSelected: () => void;
   publishingAll: boolean;
+  groupSelectMode: boolean;
+  onSetGroupSelectMode: (next: boolean) => void;
+  selectedDraftKeys: Record<string, boolean>;
+  onToggleDraftKey: (key: string, checked: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
 };
@@ -291,10 +296,19 @@ function PanelBody({
   publishError,
   onPublishOne,
   onPublishAll,
+  onPublishSelected,
   publishingAll,
+  groupSelectMode,
+  onSetGroupSelectMode,
+  selectedDraftKeys,
+  onToggleDraftKey,
   onUndo,
   onRedo,
 }: PanelBodyProps) {
+  const selectedCount = useMemo(
+    () => draftRows.filter((row) => selectedDraftKeys[row.localKey]).length,
+    [draftRows, selectedDraftKeys],
+  );
   return (
     <>
       {/* Tab bar */}
@@ -584,18 +598,51 @@ function PanelBody({
               <div>
                 <h2 className="text-sm font-bold text-foreground">Utkast</h2>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Lagres lokalt. Publiser hvert element med ønsket synlighet.
+                  Lagres lokalt pa enheten. Ved publisering blir elementer synlige for brukere med tegningstilgang.
                 </p>
               </div>
               {draftRows.length > 1 && (
-                <button
-                  type="button"
-                  onClick={onPublishAll}
-                  disabled={publishingAll || pending}
-                  className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
-                >
-                  {publishingAll ? "Publiserer…" : "Publiser alle"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!groupSelectMode ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onSetGroupSelectMode(true)}
+                        disabled={publishingAll || pending}
+                        className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                      >
+                        Velg grupper
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onPublishAll}
+                        disabled={publishingAll || pending}
+                        className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                      >
+                        {publishingAll ? "Publiserer..." : "Publiser alle"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onPublishSelected}
+                        disabled={publishingAll || pending || selectedCount === 0}
+                        className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                      >
+                        {publishingAll ? "Publiserer..." : `Publiser valgte (${selectedCount})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSetGroupSelectMode(false)}
+                        disabled={publishingAll || pending}
+                        className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                      >
+                        Avbryt
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
@@ -620,6 +667,14 @@ function PanelBody({
                 {draftRows.map((row) => (
                   <li key={row.localKey} className="rounded-xl border border-border bg-background p-3.5">
                     <div className="mb-3 flex items-center gap-2">
+                      {groupSelectMode && (
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selectedDraftKeys[row.localKey])}
+                          onChange={(e) => onToggleDraftKey(row.localKey, e.target.checked)}
+                          className="size-4 rounded border-input"
+                        />
+                      )}
                       <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-foreground">
                         {row.item.type}
                       </span>
@@ -967,12 +1022,14 @@ export function PaintWorkbench({
   }
 
   const [publishingAll, setPublishingAll] = useState(false);
+  const [groupSelectMode, setGroupSelectMode] = useState(false);
+  const [selectedDraftKeys, setSelectedDraftKeys] = useState<Record<string, boolean>>({});
 
-  async function publishAllDrafts() {
-    if (publishingAll || draftRows.length === 0) return;
+  async function publishRows(rows: DraftPublishRow[]) {
+    if (publishingAll || rows.length === 0) return;
     setPublishingAll(true);
     setPublishError(null);
-    const snapshot = [...draftRows];
+    const snapshot = [...rows];
     for (const row of snapshot) {
       const visibility = visibilityMap[row.localKey] ?? "all";
       const result = await publishOverlayItem({
@@ -1013,7 +1070,21 @@ export function PaintWorkbench({
       ]);
       removeDraftRow(row);
     }
+    setSelectedDraftKeys((prev) => {
+      const next = { ...prev };
+      for (const row of snapshot) delete next[row.localKey];
+      return next;
+    });
     setPublishingAll(false);
+  }
+
+  async function publishAllDrafts() {
+    await publishRows(draftRows);
+  }
+
+  async function publishSelectedDrafts() {
+    const selectedRows = draftRows.filter((row) => selectedDraftKeys[row.localKey]);
+    await publishRows(selectedRows);
   }
 
   function publishOne(row: DraftPublishRow) {
@@ -1089,7 +1160,16 @@ export function PaintWorkbench({
     publishError,
     onPublishOne: publishOne,
     onPublishAll: publishAllDrafts,
+    onPublishSelected: publishSelectedDrafts,
     publishingAll,
+    groupSelectMode,
+    onSetGroupSelectMode: (next) => {
+      setGroupSelectMode(next);
+      if (!next) setSelectedDraftKeys({});
+    },
+    selectedDraftKeys,
+    onToggleDraftKey: (key, checked) =>
+      setSelectedDraftKeys((prev) => ({ ...prev, [key]: checked })),
     onUndo: undo,
     onRedo: redo,
   };
