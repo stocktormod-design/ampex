@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ExternalLink } from "lucide-react";
+import { ChevronLeft, ExternalLink, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminRole } from "@/lib/roles";
 import {
   addOrderHour,
   addOrderMaterial,
+  addOrderPhoto,
+  deleteOrderPhoto,
   installerDecideOrder,
   saveDocumentationSection,
   saveRiskAssessment,
@@ -16,6 +19,8 @@ import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { OrderCsvExport } from "@/components/order-csv-export";
+import { HourTimer } from "@/app/dashboard/ordre/[orderId]/hour-timer";
+import { RiskAssessmentForm } from "@/app/dashboard/ordre/[orderId]/risk-assessment-form";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +30,7 @@ type PageProps = {
 };
 
 type OrderType = "bolig" | "maritim" | "kompleks";
-type TabId = "overview" | "risk" | "hours" | "materials" | "documentation";
+type TabId = "overview" | "risk" | "hours" | "materials" | "documentation" | "bilder";
 
 const DOC_SECTIONS: Record<OrderType, { key: string; label: string }[]> = {
   bolig: [
@@ -44,32 +49,42 @@ const DOC_SECTIONS: Record<OrderType, { key: string; label: string }[]> = {
   ],
 };
 
+const PHOTO_TYPE_LABEL: Record<string, string> = {
+  before: "Før",
+  after: "Etter",
+  general: "Generelt",
+};
+
+const PHOTO_TYPE_COLOR: Record<string, string> = {
+  before: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  after: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  general: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+};
+
 function orderStatusLabel(status: string) {
   switch (status) {
-    case "active":
-      return "Aktiv";
-    case "finished":
-      return "Ferdig";
-    case "archived":
-      return "Arkivert";
-    case "awaiting_installer":
-      return "Venter installatør";
-    case "approved":
-      return "Godkjent";
-    case "rejected":
-      return "Avvist";
-    default:
-      return status;
+    case "active": return "Aktiv";
+    case "finished": return "Ferdig";
+    case "archived": return "Arkivert";
+    case "awaiting_installer": return "Venter installatør";
+    case "approved": return "Godkjent";
+    case "rejected": return "Avvist";
+    default: return status;
   }
+}
+
+function fmtMinutes(total: number): string {
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}t ${m > 0 ? `${m}m` : ""}`.trim() : `${m}m`;
 }
 
 export default async function OrderDetailPage({ params, searchParams }: PageProps) {
   const { orderId } = params instanceof Promise ? await params : params;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const adminClient = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
   const { data: profileData } = await supabase
@@ -131,10 +146,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     minutes: number;
     note: string | null;
     profiles: { full_name: string | null }[] | null;
-  }[]).map((row) => ({
-    ...row,
-    profiles: row.profiles?.[0] ?? null,
-  }));
+  }[]).map((row) => ({ ...row, profiles: row.profiles?.[0] ?? null }));
 
   const { data: materialsData } = await supabase
     .from("order_materials")
@@ -166,12 +178,35 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
   }[];
   const pendingInbox = inboxRows.find((r) => r.status === "pending") ?? null;
 
+  // Photos
+  const { data: photosRaw } = await supabase
+    .from("order_photos")
+    .select("id, file_path, caption, photo_type, created_at, uploaded_by")
+    .eq("order_id", order.id)
+    .order("created_at", { ascending: false });
+  const photoRows = (photosRaw ?? []) as {
+    id: string;
+    file_path: string;
+    caption: string | null;
+    photo_type: string;
+    created_at: string;
+    uploaded_by: string | null;
+  }[];
+  const photos = await Promise.all(
+    photoRows.map(async (photo) => {
+      const { data: urlData } = await adminClient.storage
+        .from("order-photos")
+        .createSignedUrl(photo.file_path, 60 * 60);
+      return { ...photo, url: urlData?.signedUrl ?? null };
+    }),
+  );
+
   const requiredSections = DOC_SECTIONS[order.type];
   const completedSections = new Set(docs.filter((d) => d.is_completed).map((d) => d.section_key));
   const docsComplete = requiredSections.every((s) => completedSections.has(s.key));
 
   const requestedTab = (searchParams?.tab ?? "overview") as TabId;
-  const activeTab: TabId = ["overview", "risk", "hours", "materials", "documentation"].includes(requestedTab)
+  const activeTab: TabId = ["overview", "risk", "hours", "materials", "documentation", "bilder"].includes(requestedTab)
     ? requestedTab
     : "overview";
 
@@ -181,12 +216,15 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     { id: "hours", label: "Timer", locked: !riskDone },
     { id: "materials", label: "Materialer", locked: !riskDone },
     { id: "documentation", label: "Dokumentasjon", locked: !riskDone },
+    { id: "bilder", label: `Bilder${photos.length > 0 ? ` (${photos.length})` : ""}` },
   ];
 
   const canManage = isAdminRole(profile.role);
   const canInstallerDecide = profile.role === "installator" || isAdminRole(profile.role);
   const isAssignedInstaller = pendingInbox?.installer_user_id === user.id;
   const canTakeDecision = Boolean(pendingInbox && canInstallerDecide && (isAssignedInstaller || isAdminRole(profile.role)));
+
+  const totalMinutes = hours.reduce((sum, h) => sum + h.minutes, 0);
 
   return (
     <div className="space-y-6">
@@ -263,12 +301,25 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           </div>
 
           {(hours.length > 0 || materials.length > 0) && (
-            <div className="rounded-xl border border-border bg-muted/20 p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-foreground">Eksport</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Last ned timer og materialer som CSV (Excel).
-              </p>
-              <div className="mt-3">
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-base font-semibold">Sammendrag</h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {hours.length > 0 && (
+                  <div className="rounded-lg bg-muted/40 px-4 py-3">
+                    <p className="text-xs text-muted-foreground">Totalt registrert</p>
+                    <p className="mt-0.5 text-2xl font-bold tabular-nums">{fmtMinutes(totalMinutes)}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{hours.length} timeføring{hours.length !== 1 ? "er" : ""}</p>
+                  </div>
+                )}
+                {materials.length > 0 && (
+                  <div className="rounded-lg bg-muted/40 px-4 py-3">
+                    <p className="text-xs text-muted-foreground">Materialer</p>
+                    <p className="mt-0.5 text-2xl font-bold tabular-nums">{materials.length}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">poster registrert</p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4">
                 <OrderCsvExport orderTitle={order.title} hours={hours} materials={materials} layout="stacked" />
               </div>
             </div>
@@ -361,40 +412,18 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
 
       {activeTab === "risk" && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-semibold">Risikovurdering ({order.type})</h2>
+          <h2 className="text-base font-semibold">Sikker Jobb Analyse — {order.type}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Fullfør denne før timer, materialer og dokumentasjon kan registreres.
           </p>
-          <form action={saveRiskAssessment} className="mt-3 space-y-3">
-            <input type="hidden" name="order_id" value={order.id} />
-            <NativeLabel htmlFor="risk-json">Risiko-data (JSON)</NativeLabel>
-            <textarea
-              id="risk-json"
-              name="payload_json"
-              rows={8}
-              defaultValue={JSON.stringify(risk?.payload ?? { type: order.type, items: [] }, null, 2)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <div className="mt-5">
+            <RiskAssessmentForm
+              orderId={order.id}
+              orderType={order.type}
+              existingPayload={risk?.payload ?? null}
+              isCompleted={riskDone}
             />
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                name="complete"
-                value="0"
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              >
-                Lagre utkast
-              </button>
-              <button
-                type="submit"
-                name="complete"
-                value="1"
-                className="rounded-lg bg-foreground px-3 py-2 text-sm font-semibold text-background transition-colors hover:bg-foreground/85"
-              >
-                Marker som fullført
-              </button>
-              {riskDone && <span className="text-xs text-emerald-600 dark:text-emerald-400">Fullført</span>}
-            </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -403,28 +432,39 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-base font-semibold">Timer</h2>
+              {hours.length > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  Totalt: <strong>{fmtMinutes(totalMinutes)}</strong>
+                </span>
+              )}
               <OrderCsvExport orderTitle={order.title} hours={hours} materials={materials} layout="compact" />
             </div>
-            <form action={addOrderHour} className="mt-3 grid gap-3 sm:grid-cols-3">
-              <input type="hidden" name="order_id" value={order.id} />
-              <NativeInput name="work_date" type="date" required />
-              <NativeInput name="minutes" type="number" min={1} placeholder="Minutter" required />
-              <NativeInput name="note" placeholder="Notat" />
-              <div className="sm:col-span-3">
-                <SubmitButton disabled={!riskDone}>Legg til timer</SubmitButton>
-              </div>
-            </form>
+            <div className="mt-4 space-y-3">
+              <HourTimer orderId={order.id} />
+              <p className="text-xs text-muted-foreground">eller legg til manuelt:</p>
+              <form action={addOrderHour} className="grid gap-3 sm:grid-cols-3">
+                <input type="hidden" name="order_id" value={order.id} />
+                <NativeInput name="work_date" type="date" required />
+                <NativeInput name="minutes" type="number" min={1} placeholder="Minutter" required />
+                <NativeInput name="note" placeholder="Notat" />
+                <div className="sm:col-span-3">
+                  <SubmitButton disabled={!riskDone}>Legg til timer</SubmitButton>
+                </div>
+              </form>
+            </div>
           </div>
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             {hours.map((row) => (
               <li key={row.id} className="px-4 py-3 text-sm sm:px-5">
-                <p className="font-medium">{row.minutes} min · {row.work_date}</p>
+                <p className="font-medium">{fmtMinutes(row.minutes)} · {row.work_date}</p>
                 <p className="text-xs text-muted-foreground">
                   {row.profiles?.full_name?.trim() || "Ukjent bruker"}{row.note ? ` · ${row.note}` : ""}
                 </p>
               </li>
             ))}
-            {hours.length === 0 && <li className="px-4 py-8 text-sm text-muted-foreground sm:px-5">Ingen timer registrert.</li>}
+            {hours.length === 0 && (
+              <li className="px-4 py-8 text-sm text-muted-foreground sm:px-5">Ingen timer registrert.</li>
+            )}
           </ul>
         </div>
       )}
@@ -454,7 +494,9 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
                 <p className="text-xs text-muted-foreground">{row.note || "—"}</p>
               </li>
             ))}
-            {materials.length === 0 && <li className="px-4 py-8 text-sm text-muted-foreground sm:px-5">Ingen materialer registrert.</li>}
+            {materials.length === 0 && (
+              <li className="px-4 py-8 text-sm text-muted-foreground sm:px-5">Ingen materialer registrert.</li>
+            )}
           </ul>
         </div>
       )}
@@ -501,6 +543,112 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
               </div>
             );
           })}
+        </div>
+      )}
+
+      {activeTab === "bilder" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-base font-semibold">Last opp bilde</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              JPEG, PNG eller WebP · maks 10 MB
+            </p>
+            <form action={addOrderPhoto} className="mt-4 grid gap-3 sm:grid-cols-3" encType="multipart/form-data">
+              <input type="hidden" name="order_id" value={order.id} />
+              <div className="sm:col-span-3">
+                <input
+                  name="file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  required
+                  className="block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium"
+                />
+              </div>
+              <div className="space-y-1">
+                <NativeLabel htmlFor="photo-type">Type</NativeLabel>
+                <select
+                  id="photo-type"
+                  name="photo_type"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="before">Før-bilde</option>
+                  <option value="after">Etter-bilde</option>
+                  <option value="general">Generelt</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <NativeLabel htmlFor="photo-caption">Bildetekst (valgfritt)</NativeLabel>
+                <NativeInput id="photo-caption" name="caption" placeholder="Kort beskrivelse…" />
+              </div>
+              <div className="flex items-end">
+                <SubmitButton>Last opp</SubmitButton>
+              </div>
+            </form>
+          </div>
+
+          {photos.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
+              <p className="text-sm text-muted-foreground">Ingen bilder lastet opp ennå.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Last opp før- og etter-bilder av jobben.</p>
+            </div>
+          ) : (
+            <>
+              {(["before", "after", "general"] as const).map((type) => {
+                const group = photos.filter((p) => p.photo_type === type);
+                if (group.length === 0) return null;
+                return (
+                  <div key={type}>
+                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{PHOTO_TYPE_LABEL[type]}-bilder</h3>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {group.map((photo) => (
+                        <div key={photo.id} className="group relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                          {photo.url ? (
+                            <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={photo.url}
+                                alt={photo.caption ?? `${PHOTO_TYPE_LABEL[type]}-bilde`}
+                                className="aspect-square w-full object-cover transition-opacity group-hover:opacity-90"
+                              />
+                            </a>
+                          ) : (
+                            <div className="flex aspect-square w-full items-center justify-center bg-muted">
+                              <span className="text-xs text-muted-foreground">Ikke tilgjengelig</span>
+                            </div>
+                          )}
+                          <div className="p-2">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PHOTO_TYPE_COLOR[photo.photo_type]}`}
+                            >
+                              {PHOTO_TYPE_LABEL[photo.photo_type]}
+                            </span>
+                            {photo.caption && (
+                              <p className="mt-1 text-xs text-muted-foreground">{photo.caption}</p>
+                            )}
+                          </div>
+                          {(canManage || photo.uploaded_by === user.id) && (
+                            <form
+                              action={deleteOrderPhoto}
+                              className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
+                            >
+                              <input type="hidden" name="photo_id" value={photo.id} />
+                              <input type="hidden" name="order_id" value={order.id} />
+                              <button
+                                type="submit"
+                                className="flex size-7 items-center justify-center rounded-lg bg-background/80 text-destructive shadow backdrop-blur-sm hover:bg-background"
+                                title="Slett bilde"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
     </div>

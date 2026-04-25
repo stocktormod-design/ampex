@@ -284,7 +284,7 @@ export async function saveDocumentationSection(formData: FormData) {
 }
 
 export async function addOrderHour(formData: FormData) {
-  const { adminClient, companyId, userId } = await requireAdminContext();
+  const { adminClient, companyId, userId } = await requireContext();
   const orderId = String(formData.get("order_id") ?? "").trim();
   const workDate = String(formData.get("work_date") ?? "").trim();
   const minutes = Number(String(formData.get("minutes") ?? "0").trim());
@@ -309,11 +309,11 @@ export async function addOrderHour(formData: FormData) {
 
   if (error) redirect(`${orderPath(orderId)}?error=${encodeURIComponent(error.message)}`);
   revalidatePath(orderPath(orderId));
-  redirect(`${orderPath(orderId)}?success=hours-added`);
+  redirect(`${orderPath(orderId)}?tab=hours&success=hours-added`);
 }
 
 export async function addOrderMaterial(formData: FormData) {
-  const { adminClient, companyId } = await requireAdminContext();
+  const { adminClient, companyId } = await requireContext();
   const orderId = String(formData.get("order_id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const unit = String(formData.get("unit") ?? "stk").trim() || "stk";
@@ -341,7 +341,7 @@ export async function addOrderMaterial(formData: FormData) {
 
   if (error) redirect(`${orderPath(orderId)}?error=${encodeURIComponent(error.message)}`);
   revalidatePath(orderPath(orderId));
-  redirect(`${orderPath(orderId)}?success=materials-added`);
+  redirect(`${orderPath(orderId)}?tab=materials&success=materials-added`);
 }
 
 export async function submitOrderForInstaller(formData: FormData) {
@@ -452,6 +452,102 @@ export async function installerDecideOrder(formData: FormData) {
   revalidatePath("/dashboard/installator/inbox");
   revalidatePath(orderPath(inbox.order_id));
   redirect("/dashboard/installator/inbox?success=decision-saved");
+}
+
+const ALLOWED_PHOTO_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+export async function addOrderPhoto(formData: FormData) {
+  const { adminClient, companyId, userId } = await requireContext();
+  const orderId = String(formData.get("order_id") ?? "").trim();
+  const photoType = String(formData.get("photo_type") ?? "general").trim();
+  const caption = String(formData.get("caption") ?? "").trim();
+  const file = formData.get("file") as File | null;
+
+  if (!orderId) redirect("/dashboard/ordre?error=Mangler+ordre-ID");
+  const tabParam = "?tab=bilder";
+
+  if (!file || file.size === 0) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=Ingen+fil+valgt`);
+  }
+  if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=Ugyldig+filtype`);
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=Filen+er+for+stor+(maks+10+MB)`);
+  }
+
+  const check = await ensureOrderInCompany(adminClient, companyId, orderId);
+  if (!check.ok) redirect(`/dashboard/ordre?error=${encodeURIComponent(check.error)}`);
+
+  const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
+  const safeName = `${Date.now()}-${photoType}.${ext}`;
+  const filePath = `${companyId}/${orderId}/${safeName}`;
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const { error: uploadError } = await adminClient.storage
+    .from("order-photos")
+    .upload(filePath, bytes, { contentType: file.type, upsert: false });
+
+  if (uploadError) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=${encodeURIComponent(uploadError.message)}`);
+  }
+
+  const { error: dbError } = await adminClient.from("order_photos").insert({
+    order_id: orderId,
+    company_id: companyId,
+    uploaded_by: userId,
+    file_path: filePath,
+    caption: caption || null,
+    photo_type: photoType,
+  });
+
+  if (dbError) {
+    await adminClient.storage.from("order-photos").remove([filePath]);
+    redirect(`${orderPath(orderId)}${tabParam}&error=${encodeURIComponent(dbError.message)}`);
+  }
+
+  revalidatePath(orderPath(orderId));
+  redirect(`${orderPath(orderId)}${tabParam}&success=photo-added`);
+}
+
+export async function deleteOrderPhoto(formData: FormData) {
+  const { adminClient, companyId, userId, role } = await requireContext();
+  const photoId = String(formData.get("photo_id") ?? "").trim();
+  const orderId = String(formData.get("order_id") ?? "").trim();
+  const tabParam = "?tab=bilder";
+
+  const { data: photoData } = await adminClient
+    .from("order_photos")
+    .select("id, file_path, company_id, uploaded_by")
+    .eq("id", photoId)
+    .maybeSingle();
+
+  const photo = photoData as {
+    id: string;
+    file_path: string;
+    company_id: string;
+    uploaded_by: string | null;
+  } | null;
+
+  if (!photo || photo.company_id !== companyId) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=Bilde+ikke+funnet`);
+  }
+  if (!isAdminRole(role) && photo.uploaded_by !== userId) {
+    redirect(`${orderPath(orderId)}${tabParam}&error=Ingen+tilgang`);
+  }
+
+  await adminClient.storage.from("order-photos").remove([photo.file_path]);
+  await adminClient.from("order_photos").delete().eq("id", photoId);
+
+  revalidatePath(orderPath(orderId));
+  redirect(`${orderPath(orderId)}${tabParam}&success=photo-deleted`);
 }
 
 export async function createCustomerInline(formData: FormData) {
