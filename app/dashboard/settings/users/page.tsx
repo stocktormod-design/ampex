@@ -188,15 +188,18 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
       {/* ── Bulk blueprint access ── */}
       {montorUsers.length > 0 && projects.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-semibold">Tilgang til tegninger</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Velg montører og gi tilgang til alle tegninger eller bare prosjektene du huker av.
+        <details className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <summary className="cursor-pointer list-none text-base font-semibold">
+            Tilgang til tegninger
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(klikk for aa utvide)</span>
+          </summary>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Velg montorer og gi tilgang til alle tegninger eller bare prosjektene du huker av.
           </p>
 
           <form action={setBlueprintAccessForWorkers} className="mt-4 space-y-4">
             <div className="space-y-2">
-              <NativeLabel>Montører</NativeLabel>
+              <NativeLabel>Montorer</NativeLabel>
               <ul className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
                 {montorUsers.map((u) => (
                   <li key={u.id}>
@@ -229,7 +232,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
             <SubmitButton variant="outline">Lagre tilgang</SubmitButton>
           </form>
-        </div>
+        </details>
       )}
 
       {/* ── Users list ── */}
