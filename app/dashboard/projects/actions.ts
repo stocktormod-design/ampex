@@ -623,3 +623,56 @@ export async function convertProjectImagesToPdf(formData: FormData) {
   revalidatePath(projectPath(projectId));
   redirect(`${projectPath(projectId)}?success=converted-${convertedCount}`);
 }
+
+/**
+ * Begrens hvem som ser publiserte tegninger på prosjektet.
+ * Ingen avkryssing = tom liste i DB = alle med prosjekttilgang (can_access_project) beholder tilgang.
+ */
+export async function setProjectBlueprintAccess(formData: FormData) {
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  if (!projectId) {
+    redirect("/dashboard/projects?error=Mangler+prosjekt");
+  }
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const projectCheck = await ensureProjectInCompany(adminClient, projectId, companyId);
+  if (!projectCheck.ok) {
+    redirectProjectError(projectId, projectCheck.error);
+  }
+
+  const requested = formData
+    .getAll("blueprint_user_id")
+    .map((v) => String(v).trim())
+    .filter((id) => id.length > 0);
+
+  const unique = Array.from(new Set(requested));
+  let validIds: string[] = [];
+  if (unique.length > 0) {
+    const { data: validRows, error: validErr } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("company_id", companyId)
+      .in("id", unique);
+    if (validErr) {
+      redirectProjectError(projectId, validErr.message);
+    }
+    validIds = (validRows ?? []).map((r) => (r as { id: string }).id);
+  }
+
+  const { error: delErr } = await adminClient.from("project_blueprint_access").delete().eq("project_id", projectId);
+  if (delErr) {
+    redirectProjectError(projectId, delErr.message);
+  }
+
+  if (validIds.length > 0) {
+    const { error: insErr } = await adminClient.from("project_blueprint_access").insert(
+      validIds.map((user_id) => ({ project_id: projectId, user_id })),
+    );
+    if (insErr) {
+      redirectProjectError(projectId, insErr.message);
+    }
+  }
+
+  revalidatePath(projectPath(projectId));
+  redirect(`${projectPath(projectId)}?success=blueprint-access`);
+}

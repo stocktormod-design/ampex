@@ -4,6 +4,7 @@ import { Plus, Pencil, FileText, Eye, ChevronLeft } from "lucide-react";
 import {
   convertProjectImagesToPdf,
   deleteDraftDrawing,
+  setProjectBlueprintAccess,
   updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
@@ -12,7 +13,7 @@ import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { createClient } from "@/lib/supabase/server";
-import { isAdminRole } from "@/lib/roles";
+import { isAdminRole, roleLabel } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -90,12 +91,31 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const project = projectData as ProjectRow | null;
   if (!project) redirect("/dashboard/projects");
 
-  const { data: drawingsData } = await supabase
-    .from("drawings")
-    .select("id, name, revision, file_path, is_published, published_at, created_at")
-    .eq("project_id", project.id)
-    .order("created_at", { ascending: false });
-  const drawings = (drawingsData ?? []) as DrawingRow[];
+  const [drawingsRes, blueprintProfilesRes, blueprintAccessRes, blockedRpc] = await Promise.all([
+    supabase
+      .from("drawings")
+      .select("id, name, revision, file_path, is_published, published_at, created_at")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: false }),
+    isAdmin
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, role")
+          .eq("company_id", profile.company_id)
+          .order("full_name", { ascending: true, nullsFirst: false })
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null; role: string }[] }),
+    isAdmin
+      ? supabase.from("project_blueprint_access").select("user_id").eq("project_id", projectId)
+      : Promise.resolve({ data: [] as { user_id: string }[] }),
+    !isAdmin
+      ? supabase.rpc("is_blueprint_access_blocked", { target_project_id: projectId })
+      : Promise.resolve({ data: false }),
+  ]);
+
+  const drawings = (drawingsRes.data ?? []) as DrawingRow[];
+  const companyProfiles = (blueprintProfilesRes.data ?? []) as { id: string; full_name: string | null; role: string }[];
+  const blueprintAllowedIds = new Set((blueprintAccessRes.data ?? []).map((r) => r.user_id));
+  const blueprintAccessBlocked = blockedRpc.data === true;
 
   const q            = searchParams?.q?.trim().toLowerCase() ?? "";
   const requestedView = searchParams?.view ?? "all";
@@ -127,6 +147,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     if (searchParams.success === "published") return "Tegning publisert.";
     if (searchParams.success === "unpublished") return "Tegning satt til utkast.";
     if (searchParams.success === "draft-deleted") return "Utkast slettet.";
+    if (searchParams.success === "blueprint-access") return "Tegningstilgang er oppdatert.";
     if (searchParams.success.startsWith("converted-")) {
       return `Konverterte ${searchParams.success.replace("converted-", "")} filer til PDF.`;
     }
@@ -202,6 +223,41 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           </div>
         )}
       </div>
+
+      {/* ── Tegningstilgang (admin) ── */}
+      {isAdmin && companyProfiles.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-base font-semibold">Tegningstilgang</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Velg hvilke brukere som får se <span className="font-medium text-foreground">publiserte</span> tegninger på
+            dette prosjektet. Administratorer ser alltid alt. La alle bokser stå <span className="font-medium text-foreground">av</span> for å
+            tillate alle som allerede har prosjekttilgang (tildelt i prosjektet).
+          </p>
+          <form action={setProjectBlueprintAccess} className="mt-4 space-y-3">
+            <input type="hidden" name="project_id" value={project.id} />
+            <ul className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+              {companyProfiles.map((p) => (
+                <li key={p.id}>
+                  <label className="flex cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      name="blueprint_user_id"
+                      value={p.id}
+                      defaultChecked={blueprintAllowedIds.has(p.id)}
+                      className="size-4 rounded border-input"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-foreground">{p.full_name?.trim() || "Uten navn"}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{roleLabel(p.role)}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <SubmitButton variant="outline">Lagre tegningstilgang</SubmitButton>
+          </form>
+        </div>
+      )}
 
       {/* ── Status change (admin) ── */}
       {isAdmin && (
@@ -325,7 +381,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
           <FileText className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
           <p className="text-sm font-medium text-muted-foreground">
-            {q ? "Ingen tegninger matcher søket." : "Ingen tegninger ennå."}
+            {blueprintAccessBlocked && !q
+              ? "Du har ikke tilgang til tegninger på dette prosjektet. Be en administrator legge deg til under «Tegningstilgang», eller fjerne begrensningen."
+              : q
+                ? "Ingen tegninger matcher søket."
+                : "Ingen tegninger ennå."}
           </p>
           {isAdmin && !showUpload && (
             <Link
