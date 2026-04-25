@@ -215,6 +215,7 @@ using (
 
 -- Storage: same gate as DB rows (path: {company_id}/{project_id}/...)
 drop policy if exists "drawings_bucket_select_same_company" on storage.objects;
+drop policy if exists "drawings_bucket_select_blueprint_access" on storage.objects;
 
 create policy "drawings_bucket_select_blueprint_access"
 on storage.objects for select

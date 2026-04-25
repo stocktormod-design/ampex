@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { createUser } from "@/app/dashboard/settings/users/actions";
+import { createUser, setBlueprintAccessForWorkers } from "@/app/dashboard/settings/users/actions";
 import { DeleteUserForm } from "@/app/dashboard/settings/users/delete-user-form";
 import { UserEditRow } from "@/app/dashboard/settings/users/user-edit-row";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +30,11 @@ type CompanyUser = {
   created_at: string;
 };
 
+type CompanyProject = {
+  id: string;
+  name: string;
+};
+
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,7 +48,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
   const profile = profileData as CompanyProfile | null;
   if (!profile?.company_id) redirect("/onboarding");
-  if (!["owner", "admin"].includes(profile.role)) redirect("/dashboard/projects");
+  if (!["owner", "admin", "installator"].includes(profile.role)) redirect("/dashboard/projects");
 
   const companyName =
     profile.companies && "name" in profile.companies
@@ -56,6 +61,14 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     .eq("company_id", profile.company_id)
     .order("created_at", { ascending: true });
   const users = (usersData ?? []) as CompanyUser[];
+  const montorUsers = users.filter((u) => u.role === "montor");
+
+  const { data: projectsData } = await supabase
+    .from("projects")
+    .select("id, name")
+    .eq("company_id", profile.company_id)
+    .order("name", { ascending: true });
+  const projects = (projectsData ?? []) as CompanyProject[];
 
   function mayDelete(target: CompanyUser): boolean {
     if (target.id === user!.id) return false;
@@ -125,9 +138,9 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 defaultValue="montor"
               >
                 <option value="montor">Montør</option>
-                <option value="apprentice">Lærling</option>
-                <option value="installator">Installatør</option>
-                <option value="admin">Admin</option>
+                {profile.role !== "installator" && <option value="apprentice">Lærling</option>}
+                {profile.role !== "installator" && <option value="installator">Installatør</option>}
+                {profile.role !== "installator" && <option value="admin">Admin</option>}
                 {profile.role === "owner" && <option value="owner">Owner</option>}
               </select>
             </div>
@@ -166,6 +179,57 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         <Alert>
           <AlertDescription>Bruker oppdatert.</AlertDescription>
         </Alert>
+      )}
+      {searchParams?.success === "blueprint-access-updated" && !showForm && (
+        <Alert>
+          <AlertDescription>Tegningstilgang ble oppdatert for valgte montører.</AlertDescription>
+        </Alert>
+      )}
+
+      {/* ── Bulk blueprint access ── */}
+      {montorUsers.length > 0 && projects.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-base font-semibold">Tilgang til tegninger</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Velg montører og gi tilgang til alle tegninger eller bare prosjektene du huker av.
+          </p>
+
+          <form action={setBlueprintAccessForWorkers} className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <NativeLabel>Montører</NativeLabel>
+              <ul className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+                {montorUsers.map((u) => (
+                  <li key={u.id}>
+                    <label className="flex cursor-pointer items-center gap-3 text-sm">
+                      <input type="checkbox" name="worker_user_id" value={u.id} className="size-4 rounded border-input" />
+                      <span className="min-w-0 flex-1 font-medium text-foreground">{u.full_name?.trim() || "Uten navn"}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <NativeLabel>Tegninger (prosjekter)</NativeLabel>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+                <input type="checkbox" name="all_projects" value="1" className="size-4 rounded border-input" />
+                <span className="font-medium text-foreground">Alle tegninger</span>
+              </label>
+              <ul className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+                {projects.map((p) => (
+                  <li key={p.id}>
+                    <label className="flex cursor-pointer items-center gap-3 text-sm">
+                      <input type="checkbox" name="project_id" value={p.id} className="size-4 rounded border-input" />
+                      <span className="min-w-0 flex-1 font-medium text-foreground">{p.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <SubmitButton variant="outline">Lagre tilgang</SubmitButton>
+          </form>
+        </div>
       )}
 
       {/* ── Users list ── */}

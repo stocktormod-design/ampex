@@ -10,6 +10,17 @@ type CompanyProfile = {
   role: string;
 };
 
+function canCreateRole(creatorRole: string, requestedRole: AppRole): boolean {
+  if (isAdminRole(creatorRole)) {
+    if (requestedRole === "owner") return creatorRole === "owner";
+    return true;
+  }
+  if (creatorRole === "installator") {
+    return requestedRole === "montor";
+  }
+  return false;
+}
+
 export async function createUser(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -38,12 +49,15 @@ export async function createUser(formData: FormData) {
     .maybeSingle();
   const currentProfile = currentProfileData as CompanyProfile | null;
 
-  if (!currentProfile?.company_id || !isAdminRole(currentProfile.role)) {
+  if (
+    !currentProfile?.company_id ||
+    (!isAdminRole(currentProfile.role) && currentProfile.role !== "installator")
+  ) {
     redirect("/dashboard/settings/users?error=Du+har+ikke+tilgang");
   }
 
-  if (requestedRole === "owner" && currentProfile.role !== "owner") {
-    redirect("/dashboard/settings/users?error=Kun+owner+kan+opprette+ny+owner");
+  if (!canCreateRole(currentProfile.role, requestedRole)) {
+    redirect("/dashboard/settings/users?error=Du+kan+bare+opprette+tillatte+roller");
   }
 
   const adminClient = createAdminClient();
@@ -82,6 +96,103 @@ export async function createUser(formData: FormData) {
   }
 
   redirect("/dashboard/settings/users?success=1");
+}
+
+export async function setBlueprintAccessForWorkers(formData: FormData) {
+  const requestedUserIds = formData
+    .getAll("worker_user_id")
+    .map((v) => String(v).trim())
+    .filter((id) => id.length > 0);
+  const requestedProjectIds = formData
+    .getAll("project_id")
+    .map((v) => String(v).trim())
+    .filter((id) => id.length > 0);
+  const allProjects = String(formData.get("all_projects") ?? "") === "1";
+
+  const actionClient = await createClient();
+  const {
+    data: { user: currentUser },
+  } = await actionClient.auth.getUser();
+  if (!currentUser) redirect("/auth/login");
+
+  const { data: currentProfileData } = await actionClient
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+  const currentProfile = currentProfileData as CompanyProfile | null;
+  if (
+    !currentProfile?.company_id ||
+    (!isAdminRole(currentProfile.role) && currentProfile.role !== "installator")
+  ) {
+    redirect("/dashboard/settings/users?error=Du+har+ikke+tilgang");
+  }
+
+  if (requestedUserIds.length === 0) {
+    redirect("/dashboard/settings/users?error=Velg+minst+en+montør");
+  }
+
+  const adminClient = createAdminClient();
+
+  const { data: workerRows, error: workerErr } = await adminClient
+    .from("profiles")
+    .select("id")
+    .eq("company_id", currentProfile.company_id)
+    .eq("role", "montor")
+    .in("id", Array.from(new Set(requestedUserIds)));
+  if (workerErr) {
+    redirect(`/dashboard/settings/users?error=${encodeURIComponent(workerErr.message)}`);
+  }
+  const workerIds = (workerRows ?? []).map((r) => (r as { id: string }).id);
+  if (workerIds.length === 0) {
+    redirect("/dashboard/settings/users?error=Fant+ingen+gyldige+montører");
+  }
+
+  let projectIds: string[] = [];
+  if (allProjects) {
+    const { data: projectRows, error: projectErr } = await adminClient
+      .from("projects")
+      .select("id")
+      .eq("company_id", currentProfile.company_id);
+    if (projectErr) {
+      redirect(`/dashboard/settings/users?error=${encodeURIComponent(projectErr.message)}`);
+    }
+    projectIds = (projectRows ?? []).map((r) => (r as { id: string }).id);
+  } else {
+    if (requestedProjectIds.length === 0) {
+      redirect("/dashboard/settings/users?error=Velg+minst+en+tegning+(prosjekt)+eller+Alle+tegninger");
+    }
+    const { data: projectRows, error: projectErr } = await adminClient
+      .from("projects")
+      .select("id")
+      .eq("company_id", currentProfile.company_id)
+      .in("id", Array.from(new Set(requestedProjectIds)));
+    if (projectErr) {
+      redirect(`/dashboard/settings/users?error=${encodeURIComponent(projectErr.message)}`);
+    }
+    projectIds = (projectRows ?? []).map((r) => (r as { id: string }).id);
+  }
+
+  if (projectIds.length === 0) {
+    redirect("/dashboard/settings/users?error=Ingen+prosjekter+funnet");
+  }
+
+  const { error: deleteErr } = await adminClient
+    .from("project_blueprint_access")
+    .delete()
+    .in("project_id", projectIds)
+    .in("user_id", workerIds);
+  if (deleteErr) {
+    redirect(`/dashboard/settings/users?error=${encodeURIComponent(deleteErr.message)}`);
+  }
+
+  const rows = projectIds.flatMap((projectId) => workerIds.map((userId) => ({ project_id: projectId, user_id: userId })));
+  const { error: insertErr } = await adminClient.from("project_blueprint_access").insert(rows);
+  if (insertErr) {
+    redirect(`/dashboard/settings/users?error=${encodeURIComponent(insertErr.message)}`);
+  }
+
+  redirect("/dashboard/settings/users?success=blueprint-access-updated");
 }
 
 export async function updateUser(formData: FormData) {
