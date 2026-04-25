@@ -10,7 +10,6 @@ import {
   LayoutGrid,
   House,
   Users,
-  MoreHorizontal,
   ChevronRight,
   X,
   User,
