@@ -11,7 +11,6 @@ import {
   deleteOrderPhoto,
   installerDecideOrder,
   saveDocumentationSection,
-  saveRiskAssessment,
   submitOrderForInstaller,
   updateOrderStatus,
 } from "@/app/dashboard/ordre/actions";
