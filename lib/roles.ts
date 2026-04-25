@@ -5,6 +5,11 @@ export function isAdminRole(role: string): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** Innboks for installatør-godkjenning av ordre (admins ser alt i selskapet). */
+export function canViewInstallerInbox(role: string): boolean {
+  return role === "installator" || isAdminRole(role);
+}
+
 export function roleLabel(role: string): string {
   switch (role) {
     case "owner":

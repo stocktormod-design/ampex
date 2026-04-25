@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardNavLinks, MobileBottomNav } from "@/components/dashboard-nav";
 import { createClient } from "@/lib/supabase/server";
+import { canViewInstallerInbox as roleCanViewInstallerInbox } from "@/lib/roles";
 
 type ProfileRow = {
   company_id: string | null;
@@ -38,7 +39,7 @@ export default async function DashboardLayout({
   const canViewProjects = Boolean(profile?.company_id);
   const canManageUsers  = profile?.role === "owner" || profile?.role === "admin";
   const canManageLager  = profile?.role === "owner" || profile?.role === "admin";
-  const canViewInstallerInbox = profile?.role === "installator" || profile?.role === "owner" || profile?.role === "admin";
+  const canViewInstallerInbox = profile?.role ? roleCanViewInstallerInbox(profile.role) : false;
 
   async function signOut() {
     "use server";

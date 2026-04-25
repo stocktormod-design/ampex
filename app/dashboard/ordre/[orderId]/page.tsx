@@ -15,6 +15,7 @@ import {
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { OrderCsvExport } from "@/components/order-csv-export";
 
 export const dynamic = "force-dynamic";
 
@@ -261,6 +262,18 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
             )}
           </div>
 
+          {(hours.length > 0 || materials.length > 0) && (
+            <div className="rounded-xl border border-border bg-muted/20 p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-foreground">Eksport</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Last ned timer og materialer som CSV (Excel).
+              </p>
+              <div className="mt-3">
+                <OrderCsvExport orderTitle={order.title} hours={hours} materials={materials} layout="stacked" />
+              </div>
+            </div>
+          )}
+
           {canManage && (
             <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="text-base font-semibold">Status</h2>
@@ -388,7 +401,10 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
       {activeTab === "hours" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-base font-semibold">Timer</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-base font-semibold">Timer</h2>
+              <OrderCsvExport orderTitle={order.title} hours={hours} materials={materials} layout="compact" />
+            </div>
             <form action={addOrderHour} className="mt-3 grid gap-3 sm:grid-cols-3">
               <input type="hidden" name="order_id" value={order.id} />
               <NativeInput name="work_date" type="date" required />
@@ -416,7 +432,10 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
       {activeTab === "materials" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-base font-semibold">Materialer</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-base font-semibold">Materialer</h2>
+              <OrderCsvExport orderTitle={order.title} hours={hours} materials={materials} layout="compact" />
+            </div>
             <form action={addOrderMaterial} className="mt-3 grid gap-3 sm:grid-cols-4">
               <input type="hidden" name="order_id" value={order.id} />
               <NativeInput name="name" placeholder="Materiale" required />

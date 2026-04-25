@@ -35,6 +35,15 @@ const TOOL_KEY_BINDINGS: Record<string, ToolId> = {
   "7": "erase",
 };
 const PANEL_AUTO_OPEN_TOOLS = new Set<ToolId>(["select", "detector", "point"]);
+
+/** Korte tekster som ofte brukes i felt — ett trykk legger til (ny linje hvis det allerede står noe). */
+const COMMENT_QUICK_TEXTS = [
+  "Utført iht. tegning.",
+  "Avvik — se bilde.",
+  "Mangler materiale.",
+  "Avventer kunde.",
+  "Ikke tilgjengelig på befaring.",
+] as const;
 const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
@@ -453,6 +462,25 @@ function PanelBody({
                     <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       Kommentar
                     </label>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {COMMENT_QUICK_TEXTS.map((snippet) => (
+                        <button
+                          key={snippet}
+                          type="button"
+                          onClick={() => {
+                            const cur =
+                              (selectedDraftDetectorItem.item.type === "detector"
+                                ? checklist?.comment
+                                : pointChecklist?.comment) ?? "";
+                            const next = cur.trim() ? `${cur.trim()}\n${snippet}` : snippet;
+                            onUpdateChecklist({ comment: next });
+                          }}
+                          className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-left text-xs text-foreground transition-colors hover:bg-muted"
+                        >
+                          + {snippet}
+                        </button>
+                      ))}
+                    </div>
                     <textarea
                       value={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.comment : pointChecklist?.comment) ?? ""}
                       onChange={(e) => onUpdateChecklist({ comment: e.target.value })}

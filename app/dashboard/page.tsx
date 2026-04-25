@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FolderKanban, Package, ArrowRight, Plus, Activity, BookOpen } from "lucide-react";
+import {
+  FolderKanban,
+  Package,
+  ArrowRight,
+  Plus,
+  Activity,
+  BookOpen,
+  ClipboardList,
+  Users,
+  Inbox,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { isAdminRole } from "@/lib/roles";
+import { isAdminRole, canViewInstallerInbox } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +33,25 @@ function fmtDate(value: string): string {
     day: "2-digit",
     month: "short",
   });
+}
+
+function orderStatusShort(status: string): string {
+  switch (status) {
+    case "active":
+      return "Aktiv";
+    case "finished":
+      return "Ferdig";
+    case "archived":
+      return "Arkivert";
+    case "awaiting_installer":
+      return "Venter installatør";
+    case "approved":
+      return "Godkjent";
+    case "rejected":
+      return "Avvist";
+    default:
+      return status;
+  }
 }
 
 export default async function DashboardHomePage() {
@@ -46,10 +75,19 @@ export default async function DashboardHomePage() {
   if (!profile?.company_id) redirect("/onboarding");
 
   const isAdmin = isAdminRole(profile.role);
+  const showInstallerInbox = canViewInstallerInbox(profile.role);
   const companyName = profile.companies?.name ?? null;
   const firstName = profile.full_name?.split(" ")[0] ?? null;
 
-  const [projectsRes, drawingsRes, warehouseRes, protocolsRes, myAcksRes] = await Promise.all([
+  const inboxCountPromise = showInstallerInbox
+    ? supabase
+        .from("installer_inbox_items")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+    : Promise.resolve({ count: 0 as number | null, error: null });
+
+  const [projectsRes, drawingsRes, warehouseRes, protocolsRes, myAcksRes, recentOrdersRes, inboxCountRes] =
+    await Promise.all([
     supabase
       .from("projects")
       .select("id, name, status, created_at")
@@ -73,6 +111,13 @@ export default async function DashboardHomePage() {
       .from("protocol_acknowledgements")
       .select("protocol_id")
       .eq("user_id", user.id),
+    supabase
+      .from("orders")
+      .select("id, title, status, updated_at")
+      .eq("company_id", profile.company_id)
+      .order("updated_at", { ascending: false })
+      .limit(5),
+    inboxCountPromise,
   ]);
 
   type ProjectRow = { id: string; name: string; status: string; created_at: string };
@@ -102,6 +147,10 @@ export default async function DashboardHomePage() {
 
   const recentProjects = projects.slice(0, 5);
 
+  type OrderRow = { id: string; title: string; status: string; updated_at: string };
+  const recentOrders = (recentOrdersRes.data ?? []) as OrderRow[];
+  const pendingInboxCount = inboxCountRes.count ?? 0;
+
   return (
     <div className="space-y-8">
       {/* ── Greeting ── */}
@@ -126,6 +175,114 @@ export default async function DashboardHomePage() {
           </span>
           <ArrowRight className="ml-auto size-4 shrink-0 text-amber-500" aria-hidden />
         </Link>
+      )}
+
+      {showInstallerInbox && pendingInboxCount > 0 && (
+        <Link
+          href="/dashboard/installator/inbox"
+          className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm transition-colors hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/30 dark:hover:bg-sky-950/50"
+        >
+          <Inbox className="size-5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
+          <span className="font-medium text-sky-900 dark:text-sky-200">
+            {pendingInboxCount} ordre venter på godkjenning
+          </span>
+          <ArrowRight className="ml-auto size-4 shrink-0 text-sky-500" aria-hidden />
+        </Link>
+      )}
+
+      {/* ── Snarveier ── */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-foreground">Snarveier</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Link
+            href="/dashboard/ordre"
+            className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
+          >
+            <ClipboardList className="size-5 text-muted-foreground" aria-hidden />
+            <span className="text-sm font-medium">Ordre</span>
+            <span className="text-xs text-muted-foreground">Oppfølging og dokumentasjon</span>
+          </Link>
+          <Link
+            href="/dashboard/kunder"
+            className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
+          >
+            <Users className="size-5 text-muted-foreground" aria-hidden />
+            <span className="text-sm font-medium">Kunder</span>
+            <span className="text-xs text-muted-foreground">Adresse og kart</span>
+          </Link>
+          <Link
+            href="/dashboard/protokoller"
+            className="relative flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
+          >
+            <BookOpen className="size-5 text-muted-foreground" aria-hidden />
+            <span className="text-sm font-medium">Prosedyrer</span>
+            <span className="text-xs text-muted-foreground">Les og bekreft</span>
+            {unreadProtocols > 0 && (
+              <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                {unreadProtocols}
+              </span>
+            )}
+          </Link>
+          {showInstallerInbox ? (
+            <Link
+              href="/dashboard/installator/inbox"
+              className="relative flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
+            >
+              <Inbox className="size-5 text-muted-foreground" aria-hidden />
+              <span className="text-sm font-medium">Innboks</span>
+              <span className="text-xs text-muted-foreground">Installatør</span>
+              {pendingInboxCount > 0 && (
+                <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-bold text-white">
+                  {pendingInboxCount}
+                </span>
+              )}
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/projects"
+              className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
+            >
+              <FolderKanban className="size-5 text-muted-foreground" aria-hidden />
+              <span className="text-sm font-medium">Prosjekter</span>
+              <span className="text-xs text-muted-foreground">Tegninger og merking</span>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* ── Siste ordre ── */}
+      {recentOrders.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Siste ordre</h2>
+            <Link
+              href="/dashboard/ordre"
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Alle ordre
+              <ArrowRight className="size-3" aria-hidden />
+            </Link>
+          </div>
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            {recentOrders.map((o) => (
+              <li key={o.id}>
+                <Link
+                  href={`/dashboard/ordre/${o.id}`}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{o.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(o.updated_at)}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-xs text-foreground">
+                    {orderStatusShort(o.status)}
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* ── Stat cards ── */}
