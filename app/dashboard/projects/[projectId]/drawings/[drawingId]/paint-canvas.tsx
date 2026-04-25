@@ -49,6 +49,16 @@ const TOOL_SHORTCUT_LABEL: Record<ToolId, string> = {
   erase: "7",
 };
 
+const TOOL_LABEL_NO: Record<ToolId, string> = {
+  select: "Velg",
+  detector: "Detektor",
+  point: "Punkt",
+  line: "Linje",
+  rect: "Rektangel",
+  text: "Tekst",
+  erase: "Slett",
+};
+
 type DraftShape =
   | { type: "line"; x1: number; y1: number; x2: number; y2: number; c1x: number; c1y: number; c2x: number; c2y: number }
   | { type: "rect"; x: number; y: number; w: number; h: number }
@@ -148,24 +158,32 @@ function drawItem(
   item: OverlayItem,
   color: string,
   isSelectedDetector: boolean,
+  isDraft: boolean = false,
 ) {
+  ctx.save();
+  if (isDraft) {
+    ctx.globalAlpha = 0.72;
+    ctx.setLineDash([5, 4]);
+  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
 
   if (item.type === "detector") {
-    // Green when cap is confirmed off (detector is operational)
     const fillColor = item.checklist?.capOn === "no" ? "#22c55e" : color;
     if (isSelectedDetector) {
       ctx.beginPath();
       ctx.arc(item.x, item.y, 13, 0, Math.PI * 2);
       ctx.strokeStyle = "#22d3ee";
       ctx.lineWidth = 2.5;
+      ctx.setLineDash([]);
       ctx.stroke();
       ctx.lineWidth = 2;
+      if (isDraft) ctx.setLineDash([5, 4]);
     }
     ctx.fillStyle = fillColor;
     ctx.strokeStyle = fillColor;
+    ctx.setLineDash([]);
     ctx.beginPath();
     ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
     ctx.fill();
@@ -173,30 +191,45 @@ function drawItem(
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.lineWidth = 2;
+    if (isDraft) {
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (item.label) {
+      ctx.setLineDash([]);
       ctx.fillStyle = "#111827";
       ctx.font = "12px sans-serif";
       ctx.fillText(item.label, item.x + 10, item.y - 10);
     }
-    return;
-  }
-
-  if (item.type === "point") {
-    const fillColor = "#f59e0b";
+  } else if (item.type === "point") {
     if (isSelectedDetector) {
       ctx.beginPath();
       ctx.arc(item.x, item.y, 13, 0, Math.PI * 2);
       ctx.strokeStyle = "#22d3ee";
       ctx.lineWidth = 2.5;
+      ctx.setLineDash([]);
       ctx.stroke();
       ctx.lineWidth = 2;
+      if (isDraft) ctx.setLineDash([5, 4]);
     }
-    ctx.fillStyle = fillColor;
+    ctx.fillStyle = "#f59e0b";
     ctx.strokeStyle = "#111827";
+    ctx.setLineDash([]);
     ctx.beginPath();
     ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    if (isDraft) {
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "#f59e0b";
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
     ctx.fillStyle = "#111827";
     ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
@@ -204,27 +237,21 @@ function drawItem(
     ctx.fillText("!", item.x, item.y + 0.5);
     ctx.textAlign = "start";
     ctx.textBaseline = "alphabetic";
-    return;
-  }
-
-  if (item.type === "line") {
+  } else if (item.type === "line") {
     const pts = linePoints(item);
     ctx.beginPath();
     ctx.moveTo(pts.x1, pts.y1);
     ctx.bezierCurveTo(pts.c1x, pts.c1y, pts.c2x, pts.c2y, pts.x2, pts.y2);
     ctx.stroke();
-    return;
-  }
-
-  if (item.type === "rect") {
+  } else if (item.type === "rect") {
     ctx.strokeRect(item.x, item.y, item.w, item.h);
-    return;
-  }
-
-  if (item.type === "text") {
+  } else if (item.type === "text") {
+    ctx.setLineDash([]);
     ctx.font = "14px sans-serif";
     ctx.fillText(item.text, item.x, item.y);
   }
+
+  ctx.restore();
 }
 
 export function PaintCanvas({
@@ -649,6 +676,7 @@ export function PaintCanvas({
 
     for (const layer of allLayers) {
       if (!layer.visible) continue;
+      const isLayerDraft = draftLayers.some((dl) => dl.id === layer.id);
       for (const item of layer.items) {
         const displayItem = toDisplayItem(item);
         const isSelectedDetector =
@@ -656,7 +684,7 @@ export function PaintCanvas({
           selectedDraftDetector?.layerId === layer.id &&
           selectedDraftDetector?.itemId === item.id;
         const isSelectedItem = selectedDraftItem?.layerId === layer.id && selectedDraftItem?.itemId === item.id;
-        drawItem(ctx, displayItem, layer.color, Boolean(isSelectedDetector));
+        drawItem(ctx, displayItem, layer.color, Boolean(isSelectedDetector), isLayerDraft);
         if (isSelectedItem && item.type === "rect" && displayItem.type === "rect") {
           ctx.save();
           ctx.strokeStyle = "#0ea5e9";
@@ -677,7 +705,7 @@ export function PaintCanvas({
     }
 
     if (draft && activeLayer) {
-      drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false);
+      drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false, true);
     }
 
     const selectedLine = getSelectedLineWithPoints();
@@ -1524,11 +1552,20 @@ export function PaintCanvas({
         </div>
       </div>
 
-      {/* ── Active tool indicator – bottom-left corner ── */}
-      <div className="pointer-events-none absolute bottom-2 left-2 z-10 sm:bottom-3 sm:left-3">
-        <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
-            {activeTool} [{TOOL_SHORTCUT_LABEL[activeTool]}]
+      {/* ── Active tool indicator + legend – bottom-left corner ── */}
+      <div className="pointer-events-none absolute bottom-2 left-2 z-10 flex flex-col items-start gap-1 sm:bottom-3 sm:left-3">
+        <div className="flex items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-900/90 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+          <span className="text-xs font-bold text-zinc-100">{TOOL_LABEL_NO[activeTool]}</span>
+          <span className="text-[10px] font-semibold text-zinc-500">[{TOOL_SHORTCUT_LABEL[activeTool]}]</span>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border border-zinc-800/50 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm">
+          <span className="flex items-center gap-1 text-[9px] text-zinc-500">
+            <span className="inline-block h-px w-5 border-b-2 border-dashed border-zinc-400 opacity-70" />
+            Utkast
+          </span>
+          <span className="flex items-center gap-1 text-[9px] text-zinc-500">
+            <span className="inline-block h-px w-5 border-b-2 border-zinc-400" />
+            Publisert
           </span>
         </div>
       </div>

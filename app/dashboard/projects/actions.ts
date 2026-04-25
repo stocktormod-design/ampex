@@ -32,7 +32,7 @@ type DrawingOwnedRow = {
   project_id: string;
   file_path: string;
   is_published: boolean;
-  projects: { company_id: string }[] | null;
+  projects: { company_id: string } | null;
 };
 
 function sanitizeFileName(value: string): string {
@@ -402,8 +402,8 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
     return { ok: false as const, error: drawingErr?.message ?? "Tegning ikke funnet" };
   }
 
-  const drawing = drawingData as { id: string; project_id: string; projects: { company_id: string }[] | null };
-  const ownerCompanyId = drawing.projects?.[0]?.company_id ?? null;
+  const drawing = drawingData as unknown as { id: string; project_id: string; projects: { company_id: string } | null };
+  const ownerCompanyId = drawing.projects?.company_id ?? null;
   if (ownerCompanyId !== companyId) {
     return { ok: false as const, error: "Tegningen tilhører ikke firmaet" };
   }
@@ -453,7 +453,7 @@ async function getOwnedDrawing(adminClient: ReturnType<typeof createAdminClient>
   }
 
   const row = rowToOwned(data);
-  const ownerCompanyId = row.projects?.[0]?.company_id ?? null;
+  const ownerCompanyId = row.projects?.company_id ?? null;
   if (ownerCompanyId !== companyId) {
     return { ok: false as const, error: "Tegning tilhører ikke firmaet" };
   }
