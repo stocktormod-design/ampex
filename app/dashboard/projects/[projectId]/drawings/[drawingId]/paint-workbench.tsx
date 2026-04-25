@@ -289,7 +289,7 @@ function PanelBody({
   return (
     <>
       {/* Tab bar */}
-      <div className="flex shrink-0 items-stretch justify-between border-b border-zinc-800/80">
+      <div className="flex shrink-0 items-stretch justify-between border-b border-border">
         <div className="flex">
           {(["status", "drafts"] as const).map((tab) => (
             <button
@@ -297,7 +297,7 @@ function PanelBody({
               type="button"
               onClick={() => onSetActiveTab(tab)}
               className={`relative px-5 py-3.5 text-sm font-semibold tracking-tight transition-colors ${
-                activeTab === tab ? "text-cyan-400" : "text-zinc-500 hover:text-zinc-300"
+                activeTab === tab ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab === "status" ? "Status" : "Utkast"}
@@ -316,7 +316,7 @@ function PanelBody({
           type="button"
           onClick={onClose}
           title="Lukk"
-          className="flex items-center justify-center px-4 text-zinc-600 transition-colors hover:text-zinc-300"
+          className="flex items-center justify-center px-4 text-muted-foreground transition-colors hover:text-foreground"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4l8 8M12 4l-8 8" />
@@ -325,15 +325,15 @@ function PanelBody({
       </div>
 
       {/* Context strip */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800/40 px-4 py-2.5">
-        <div className="flex items-center gap-1.5 rounded-lg border border-zinc-800/80 bg-zinc-900 px-2.5 py-1.5">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Verktøy</span>
-          <span className="text-xs font-bold text-cyan-300">{activeTool}</span>
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
+        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Verktøy</span>
+          <span className="text-xs font-bold text-primary">{activeTool}</span>
         </div>
         {activeLayer && (
-          <div className="flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900 px-2.5 py-1.5">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5">
             <span className="h-2.5 w-2.5 rounded-full ring-1 ring-white/10" style={{ backgroundColor: activeLayer.color }} />
-            <span className="text-xs font-semibold text-zinc-200">{activeLayer.name}</span>
+            <span className="text-xs font-semibold text-foreground">{activeLayer.name}</span>
           </div>
         )}
         <div className="ml-auto flex items-center gap-1">
@@ -341,7 +341,7 @@ function PanelBody({
             type="button"
             onClick={onUndo}
             title="Angre (Ctrl+Z)"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 7V4m0 3l3-3M3 7a6 6 0 109 0" />
@@ -351,7 +351,7 @@ function PanelBody({
             type="button"
             onClick={onRedo}
             title="Gjør om (Ctrl+Y)"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7V4m0 3l-3-3M13 7a6 6 0 11-9 0" />
@@ -367,7 +367,7 @@ function PanelBody({
           <div className="space-y-4 px-4 py-4">
             {/* Layer selector */}
             <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Aktivt lag</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Aktivt lag</p>
               <div className="flex flex-wrap gap-1.5">
                 {layers.map((layer) => (
                   <button
@@ -376,13 +376,13 @@ function PanelBody({
                     onClick={() => onSetActiveLayerId(layer.id)}
                     className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
                       activeLayerId === layer.id
-                        ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
-                        : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: layer.color }} />
                     {layer.name}
-                    <span className="text-zinc-600">·{layer.items.length}</span>
+                    <span className="text-muted-foreground">·{layer.items.length}</span>
                   </button>
                 ))}
               </div>
@@ -391,9 +391,9 @@ function PanelBody({
             {/* Detektor status */}
             <div>
               <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-sm font-bold text-zinc-100">Detektor-status</h2>
+                <h2 className="text-sm font-bold text-foreground">Detektor-status</h2>
                 {selectedDraftDetectorItem && (
-                  <span className="text-xs text-zinc-500">{selectedDraftDetectorItem.layer.name}</span>
+                  <span className="text-xs text-muted-foreground">{selectedDraftDetectorItem.layer.name}</span>
                 )}
               </div>
 
@@ -523,14 +523,14 @@ function PanelBody({
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-8 text-center">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
-                    <svg className="h-5 w-5 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <div className="rounded-xl border border-border bg-muted/30 px-4 py-8 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
+                    <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zm-7.518-.267A8.25 8.25 0 1120.25 10.5M8.288 14.212A5.25 5.25 0 1117.25 10.5" />
                     </svg>
                   </div>
-                  <p className="text-sm font-medium text-zinc-400">Velg et detektor- eller punkt-element</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                  <p className="text-sm font-medium text-muted-foreground">Velg et detektor- eller punkt-element</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     Trykk på et element i tegningen for å redigere statusen.
                   </p>
                 </div>
@@ -538,9 +538,9 @@ function PanelBody({
             </div>
 
             {/* Tips box */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Tips</p>
-              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-zinc-600">
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tips</p>
+              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
                 <li>• Trykk på et detektor- eller punkt-element for status</li>
                 <li>• I linje-modus: dra i 4 håndtak for å bøye kurven</li>
                 <li>• Klyp for å zoome, bruk «Velg» + dra for å panorere</li>
@@ -554,8 +554,8 @@ function PanelBody({
           <div className="space-y-4 px-4 py-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h2 className="text-sm font-bold text-zinc-100">Utkast</h2>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                <h2 className="text-sm font-bold text-foreground">Utkast</h2>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   Lagres lokalt. Publiser hvert element med ønsket synlighet.
                 </p>
               </div>
@@ -578,26 +578,26 @@ function PanelBody({
             )}
 
             {draftRows.length === 0 ? (
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 py-8 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
-                  <svg className="h-5 w-5 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="rounded-xl border border-border bg-muted/30 py-8 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
+                  <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
                   </svg>
                 </div>
-                <p className="text-sm font-medium text-zinc-400">Ingen utkast ennå</p>
-                <p className="mt-1 text-xs text-zinc-600">Tegn noe for å opprette et utkast.</p>
+                <p className="text-sm font-medium text-muted-foreground">Ingen utkast ennå</p>
+                <p className="mt-1 text-xs text-muted-foreground">Tegn noe for å opprette et utkast.</p>
               </div>
             ) : (
               <ul className="space-y-2">
                 {draftRows.map((row) => (
-                  <li key={row.localKey} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3.5">
+                  <li key={row.localKey} className="rounded-xl border border-border bg-background p-3.5">
                     <div className="mb-3 flex items-center gap-2">
                       <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
                         {row.item.type}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: row.layerColor }} />
-                        <span className="text-xs text-zinc-500">{row.layerName}</span>
+                        <span className="text-xs text-muted-foreground">{row.layerName}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -649,6 +649,14 @@ export function PaintWorkbench({
   const layersRef = useRef<OverlayLayer[]>(layers);
   const historyRef = useRef<OverlayLayer[][]>([]);
   const historyIdxRef = useRef(-1);
+  const historyLastCommitAtRef = useRef(0);
+
+  function deepCloneLayers(value: OverlayLayer[]): OverlayLayer[] {
+    if (typeof structuredClone === "function") {
+      return structuredClone(value);
+    }
+    return JSON.parse(JSON.stringify(value)) as OverlayLayer[];
+  }
 
   function setLayers(next: OverlayLayer[]) {
     layersRef.current = next;
@@ -656,13 +664,24 @@ export function PaintWorkbench({
   }
 
   function initHistory(initial: OverlayLayer[]) {
-    historyRef.current = [JSON.parse(JSON.stringify(initial))];
+    historyRef.current = [deepCloneLayers(initial)];
     historyIdxRef.current = 0;
+    historyLastCommitAtRef.current = Date.now();
   }
 
   const setLayersWithHistory = useCallback((updater: (prev: OverlayLayer[]) => OverlayLayer[]) => {
     const next = updater(layersRef.current);
-    historyRef.current = [...historyRef.current.slice(0, historyIdxRef.current + 1), JSON.parse(JSON.stringify(next))].slice(-51);
+    const snapshot = deepCloneLayers(next);
+    const now = Date.now();
+    const tooSoon = now - historyLastCommitAtRef.current < 180;
+    const base = historyRef.current.slice(0, historyIdxRef.current + 1);
+    if (tooSoon && base.length > 0) {
+      base[base.length - 1] = snapshot;
+      historyRef.current = base;
+    } else {
+      historyRef.current = [...base, snapshot].slice(-51);
+      historyLastCommitAtRef.current = now;
+    }
     historyIdxRef.current = historyRef.current.length - 1;
     layersRef.current = next;
     setLayersRaw(next);
@@ -671,14 +690,14 @@ export function PaintWorkbench({
   function undo() {
     if (historyIdxRef.current <= 0) return;
     historyIdxRef.current -= 1;
-    const state = JSON.parse(JSON.stringify(historyRef.current[historyIdxRef.current])) as OverlayLayer[];
+    const state = deepCloneLayers(historyRef.current[historyIdxRef.current]);
     setLayers(state);
   }
 
   function redo() {
     if (historyIdxRef.current >= historyRef.current.length - 1) return;
     historyIdxRef.current += 1;
-    const state = JSON.parse(JSON.stringify(historyRef.current[historyIdxRef.current])) as OverlayLayer[];
+    const state = deepCloneLayers(historyRef.current[historyIdxRef.current]);
     setLayers(state);
   }
   const [activeLayerId, setActiveLayerId] = useState<string>("");
@@ -748,7 +767,10 @@ export function PaintWorkbench({
   }, [layers, activeLayerId]);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(layers));
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(storageKey, JSON.stringify(layers));
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [layers, storageKey]);
 
   useEffect(() => {
@@ -875,8 +897,7 @@ export function PaintWorkbench({
 
   function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist> | Partial<PointChecklist>) {
     if (!selectedDraftDetector) return;
-    setLayersWithHistory((prev) =>
-      prev.map((layer) => {
+    const updated = layersRef.current.map((layer) => {
         if (layer.id !== selectedDraftDetector.layerId) return layer;
         return {
           ...layer,
@@ -893,8 +914,8 @@ export function PaintWorkbench({
             return item;
           }),
         };
-      }),
-    );
+      });
+    setLayers(updated);
   }
 
   async function onAttachPhoto(file: File | null) {
@@ -1050,7 +1071,7 @@ export function PaintWorkbench({
     <div className="relative flex h-full overflow-hidden">
 
       {/* ── LEFT SIDEBAR – desktop only ── */}
-      <nav className="hidden shrink-0 sm:flex sm:w-14 sm:flex-col sm:border-r sm:border-zinc-800/60 sm:bg-zinc-950">
+      <nav className="hidden shrink-0 sm:flex sm:w-14 sm:flex-col sm:border-r sm:border-border sm:bg-background">
         <PaintToolbar
           sidebar
           activeTool={activeTool}
@@ -1089,7 +1110,7 @@ export function PaintWorkbench({
         </div>
 
         {/* Mobile bottom toolbar – below canvas (never overlaps!) */}
-        <div className="relative z-30 shrink-0 border-t border-zinc-800/60 bg-zinc-950/98 backdrop-blur-sm sm:hidden">
+        <div className="relative z-30 shrink-0 border-t border-border bg-background/98 backdrop-blur-sm sm:hidden">
           <PaintToolbar
             bottomBar
             panelOpen={panelOpen}
@@ -1109,7 +1130,7 @@ export function PaintWorkbench({
 
       {/* ── RIGHT PANEL – desktop: part of flex layout (no overlay, no shadow) ── */}
       <aside
-        className={`hidden shrink-0 flex-col border-l border-zinc-800/60 bg-[#0d0d10] text-zinc-100 transition-all duration-200 ease-out sm:flex ${
+        className={`hidden shrink-0 flex-col border-l border-border bg-background text-foreground transition-all duration-200 ease-out sm:flex ${
           panelOpen ? "w-72 xl:w-80" : "w-0 overflow-hidden border-l-0"
         }`}
       >
@@ -1130,12 +1151,12 @@ export function PaintWorkbench({
 
       {/* ── MOBILE PANEL – slide-in overlay ── */}
       <aside
-        className={`absolute inset-y-0 right-0 z-50 flex flex-col border-l border-zinc-800/60 bg-[#0d0d10] text-zinc-100 shadow-2xl transition-transform duration-300 ease-out sm:hidden ${
+        className={`absolute inset-y-0 right-0 z-50 flex flex-col border-l border-border bg-background text-foreground shadow-2xl transition-transform duration-180 ease-out sm:hidden ${
           panelOpen ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ width: "min(22rem, 100vw)" }}
       >
-        <PanelBody onClose={() => setPanelOpen(false)} {...panelBodyProps} />
+        {panelOpen ? <PanelBody onClose={() => setPanelOpen(false)} {...panelBodyProps} /> : null}
       </aside>
     </div>
   );

@@ -538,6 +538,9 @@ export function PaintCanvas({
     if (item.type === "detector" || item.type === "point") {
       onSelectDraftDetector(selection);
       setSelectedDraftLine(null);
+      if (activeTool !== "line") {
+        onOpenStatusPanel?.();
+      }
     } else if (item.type === "line") {
       setSelectedDraftLine(selection);
       onSelectDraftDetector(null);

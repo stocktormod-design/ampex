@@ -105,10 +105,15 @@ export function MobileBottomNav(props: MobileNavProps) {
   }, [projectsMode]);
 
   useEffect(() => {
+    router.prefetch("/dashboard");
     router.prefetch("/dashboard/projects");
     router.prefetch("/dashboard/ordre");
     router.prefetch("/dashboard/lager");
     router.prefetch("/dashboard/protokoller");
+    router.prefetch("/dashboard/kunder");
+    router.prefetch("/dashboard/settings/profile");
+    router.prefetch("/dashboard/settings/users");
+    router.prefetch("/dashboard/installator/inbox");
   }, [router]);
 
   useEffect(() => {
@@ -142,7 +147,7 @@ export function MobileBottomNav(props: MobileNavProps) {
 
       {/* Slide-up drawer */}
       <div
-        className={`fixed inset-x-0 z-50 sm:hidden transition-all duration-300 ease-out ${
+        className={`fixed inset-x-0 z-50 sm:hidden transition-all duration-180 ease-out ${
           drawerOpen ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
         }`}
         style={{ bottom: "calc(3.75rem + env(safe-area-inset-bottom, 0px))" }}

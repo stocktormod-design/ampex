@@ -76,10 +76,10 @@ export function PaintToolbar({
   /* ── LEFT SIDEBAR – desktop ── */
   if (sidebar) {
     return (
-      <nav className="flex h-full flex-col" aria-label="Verktøylinje">
+      <nav className="flex h-full flex-col bg-background" aria-label="Verktøylinje">
         {/* Tool buttons */}
         <div className="flex flex-1 flex-col gap-px overflow-y-auto px-1.5 py-2 min-h-0">
-          <p className="mb-1.5 text-center text-[8px] font-bold uppercase tracking-widest text-zinc-700">
+          <p className="mb-1.5 text-center text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
             Verktøy
           </p>
 
@@ -94,8 +94,8 @@ export function PaintToolbar({
                 title={`${tool.label} — ${tool.hint}`}
                 className={`relative flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2.5 transition-all active:scale-95 ${
                   isActive
-                    ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-inset ring-cyan-400/25"
-                    : "text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300"
+                    ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {isActive && (
@@ -115,11 +115,11 @@ export function PaintToolbar({
         </div>
 
         {/* Divider */}
-        <div className="mx-2 h-px shrink-0 bg-zinc-800/70" />
+        <div className="mx-2 h-px shrink-0 bg-border" />
 
         {/* Layers */}
         <div className="flex shrink-0 flex-col gap-0.5 px-1.5 py-2">
-          <p className="mb-1 text-center text-[8px] font-bold uppercase tracking-widest text-zinc-700">
+          <p className="mb-1 text-center text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
             Lag
           </p>
 
@@ -134,8 +134,8 @@ export function PaintToolbar({
                   title={`${layer.name} — ${layer.items.length} elementer`}
                   className={`relative flex h-8 w-full items-center justify-center rounded-lg transition-all active:scale-95 ${
                     isActive
-                      ? "bg-zinc-800 ring-1 ring-inset ring-zinc-600"
-                      : "hover:bg-zinc-800/40"
+                      ? "bg-muted ring-1 ring-inset ring-border"
+                      : "hover:bg-muted/70"
                   }`}
                 >
                   <span
@@ -143,7 +143,7 @@ export function PaintToolbar({
                     style={{ backgroundColor: layer.color }}
                   />
                   {layer.items.length > 0 && (
-                    <span className="absolute right-0.5 top-0.5 min-w-[12px] text-center text-[7px] font-bold leading-none text-zinc-500">
+                    <span className="absolute right-0.5 top-0.5 min-w-[12px] text-center text-[7px] font-bold leading-none text-muted-foreground">
                       {layer.items.length}
                     </span>
                   )}
@@ -157,7 +157,7 @@ export function PaintToolbar({
               type="button"
               onClick={onAddLayer}
               title="Nytt lag"
-              className="flex h-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 active:scale-95"
+              className="flex h-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
             >
               <Plus className="size-3.5" aria-hidden />
             </button>
@@ -165,7 +165,7 @@ export function PaintToolbar({
               type="button"
               onClick={() => { if (activeLayerId) onToggleLayer(activeLayerId); }}
               title={isLayerVisible ? "Skjul lag" : "Vis lag"}
-              className="flex h-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 active:scale-95"
+              className="flex h-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
             >
               {isLayerVisible
                 ? <Eye className="size-3.5" aria-hidden />
@@ -177,7 +177,7 @@ export function PaintToolbar({
             type="button"
             onClick={onClearActiveLayer}
             title="Tøm aktivt lag"
-            className="mt-0.5 flex h-7 w-full items-center justify-center rounded-lg border border-red-500/25 bg-zinc-900/80 text-red-500/60 transition-all hover:border-red-500/50 hover:text-red-400 active:scale-95"
+            className="mt-0.5 flex h-7 w-full items-center justify-center rounded-lg border border-destructive/30 bg-background text-destructive/70 transition-all hover:bg-destructive/10 hover:text-destructive active:scale-95"
           >
             <Trash2 className="size-3.5" aria-hidden />
           </button>
@@ -190,7 +190,7 @@ export function PaintToolbar({
   if (bottomBar) {
     return (
       <nav
-        className="flex w-full items-center gap-0.5 overflow-x-auto px-2 py-2"
+        className="flex w-full items-center gap-0.5 overflow-x-auto bg-background px-2 py-2"
         style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
         aria-label="Verktøylinje"
       >
@@ -205,25 +205,25 @@ export function PaintToolbar({
               onClick={() => onSelectTool(tool.id)}
               className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border transition-all active:scale-95 ${
                 isActive
-                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.15)]"
-                  : "border-zinc-800/80 bg-zinc-900/80 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               <Icon className="size-4 shrink-0" aria-hidden />
-              <span className={`text-[7px] font-bold uppercase leading-none ${isActive ? "text-cyan-400" : "text-zinc-600"}`}>
+              <span className={`text-[7px] font-bold uppercase leading-none ${isActive ? "text-primary" : "text-muted-foreground"}`}>
                 {tool.label.slice(0, 5)}
               </span>
             </button>
           );
         })}
 
-        <div className="mx-1.5 h-6 w-px shrink-0 bg-zinc-800" />
+        <div className="mx-1.5 h-6 w-px shrink-0 bg-border" />
 
         <button
           type="button"
           onClick={onAddLayer}
           title="Nytt lag"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/80 text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
         >
           <Plus className="size-[18px]" aria-hidden />
         </button>
@@ -232,7 +232,7 @@ export function PaintToolbar({
           type="button"
           title={isLayerVisible ? "Skjul lag" : "Vis lag"}
           onClick={() => { if (activeLayerId) onToggleLayer(activeLayerId); }}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/80 text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
         >
           {isLayerVisible
             ? <Eye className="size-[18px]" aria-hidden />
@@ -243,22 +243,22 @@ export function PaintToolbar({
           type="button"
           title="Tøm aktivt lag"
           onClick={onClearActiveLayer}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-zinc-900/80 text-red-500/70 transition-all hover:border-red-500/50 hover:text-red-400 active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-destructive/30 bg-background text-destructive/70 transition-all hover:bg-destructive/10 hover:text-destructive active:scale-95"
         >
           <Trash2 className="size-[18px]" aria-hidden />
         </button>
 
         {onTogglePanel && (
           <>
-            <div className="mx-1.5 h-6 w-px shrink-0 bg-zinc-800" />
+            <div className="mx-1.5 h-6 w-px shrink-0 bg-border" />
             <button
               type="button"
               onClick={onTogglePanel}
               title={panelOpen ? "Skjul panel" : "Vis panel"}
               className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-95 ${
                 panelOpen
-                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.15)]"
-                  : "border-zinc-800/80 bg-zinc-900/80 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               <Layers3 className="size-[18px]" aria-hidden />
