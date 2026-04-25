@@ -112,19 +112,19 @@ function NeonCheckbox({
     <label
       className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3.5 transition-all active:scale-[0.99] ${
         checked
-          ? "border-cyan-500/40 bg-cyan-500/5"
-          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+          ? "border-primary/30 bg-primary/5"
+          : "border-border bg-background hover:bg-muted/40"
       }`}
     >
       <span
         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all ${
           checked
-            ? "border-cyan-400 bg-cyan-400/20 shadow-[0_0_8px_rgba(34,211,238,0.35)]"
-            : "border-zinc-600 bg-zinc-800"
+            ? "border-primary bg-primary/15"
+            : "border-border bg-muted"
         }`}
       >
         {checked && (
-          <svg className="h-3 w-3 text-cyan-400" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
           </svg>
         )}
@@ -135,7 +135,7 @@ function NeonCheckbox({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="text-sm font-medium text-zinc-100">{label}</span>
+      <span className="text-sm font-medium text-foreground">{label}</span>
     </label>
   );
 }
@@ -196,7 +196,7 @@ function SerialNumberField({
 
   return (
     <div>
-      <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+      <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         Serienummer
       </label>
       <div className="space-y-2">
@@ -205,9 +205,9 @@ function SerialNumberField({
           value={serialNumber}
           onChange={(e) => onUpdateSerialNumber(e.target.value)}
           placeholder="Skriv eller skann serienummer"
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-700 transition-colors focus:border-cyan-500/50 focus:outline-none"
+          className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none"
         />
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
           Skann strekkode fra bilde
           <input
             type="file"
@@ -220,7 +220,7 @@ function SerialNumberField({
             }}
           />
         </label>
-        {scanning ? <p className="text-xs text-zinc-500">Skanner bilde...</p> : null}
+        {scanning ? <p className="text-xs text-muted-foreground">Skanner bilde...</p> : null}
         {scanError ? <p className="text-xs font-semibold text-red-400">{scanError}</p> : null}
       </div>
       <div id={scannerElementId} className="sr-only" />
@@ -302,12 +302,12 @@ function PanelBody({
             >
               {tab === "status" ? "Status" : "Utkast"}
               {tab === "drafts" && draftRows.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold text-cyan-400">
+                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                   {draftRows.length}
                 </span>
               )}
               {activeTab === tab && (
-                <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-cyan-400" />
+                <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
               )}
             </button>
           ))}
@@ -413,7 +413,7 @@ function PanelBody({
                       />
 
                       <div>
-                        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kappe</p>
+                        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Kappe</p>
                         <div className="grid grid-cols-3 gap-2">
                           {(["yes", "no"] as const).map((v) => {
                             const active = checklist.capOn === v;
@@ -424,8 +424,8 @@ function PanelBody({
                                 onClick={() => onUpdateChecklist({ capOn: v })}
                                 className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
                                   active
-                                    ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_16px_rgba(34,211,238,0.06)]"
-                                    : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                                    ? "border-primary/40 bg-primary/10 text-foreground"
+                                    : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                                 }`}
                               >
                                 {v === "yes" ? "Ja" : "Nei"}
@@ -437,8 +437,8 @@ function PanelBody({
                             onClick={() => onUpdateChecklist({ capOn: null })}
                             className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
                               checklist.capOn === null
-                                ? "border-zinc-600 bg-zinc-800 text-zinc-300"
-                                : "border-zinc-800 bg-zinc-900 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400"
+                                ? "border-border bg-muted text-foreground"
+                                : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                             }`}
                           >
                             —
@@ -450,14 +450,14 @@ function PanelBody({
 
                   {/* Comment */}
                   <div>
-                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       Kommentar
                     </label>
                     <textarea
                       value={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.comment : pointChecklist?.comment) ?? ""}
                       onChange={(e) => onUpdateChecklist({ comment: e.target.value })}
                       rows={3}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-700 transition-colors focus:border-cyan-500/50 focus:outline-none"
+                      className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none"
                       placeholder={selectedDraftDetectorItem.item.type === "detector" ? "F.eks. Mangler strøm, følges opp..." : "Hva må følges opp her?"}
                     />
                   </div>
@@ -471,11 +471,11 @@ function PanelBody({
 
                   {/* Photo */}
                   <div>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       Bildevedlegg
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 py-3 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 active:bg-zinc-800">
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground active:bg-muted">
                         <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
@@ -492,7 +492,7 @@ function PanelBody({
                           }}
                         />
                       </label>
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 py-3 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 active:bg-zinc-800">
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground active:bg-muted">
                         <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
@@ -512,10 +512,10 @@ function PanelBody({
                       <img
                         src={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? ""}
                         alt="Vedlegg"
-                        className="mt-3 h-36 w-full rounded-xl border border-zinc-800 object-cover"
+                        className="mt-3 h-36 w-full rounded-xl border border-border object-cover"
                       />
                     ) : (
-                      <p className="mt-2 text-center text-xs text-zinc-700">Ingen vedlegg ennå</p>
+                      <p className="mt-2 text-center text-xs text-muted-foreground">Ingen vedlegg ennå</p>
                     )}
                     {draftError && (
                       <p className="mt-2 text-xs font-semibold text-red-400">{draftError}</p>
@@ -564,7 +564,7 @@ function PanelBody({
                   type="button"
                   onClick={onPublishAll}
                   disabled={publishingAll || pending}
-                  className="shrink-0 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+                  className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
                 >
                   {publishingAll ? "Publiserer…" : "Publiser alle"}
                 </button>
@@ -592,7 +592,7 @@ function PanelBody({
                 {draftRows.map((row) => (
                   <li key={row.localKey} className="rounded-xl border border-border bg-background p-3.5">
                     <div className="mb-3 flex items-center gap-2">
-                      <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                      <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-foreground">
                         {row.item.type}
                       </span>
                       <span className="flex items-center gap-1.5">
@@ -609,7 +609,7 @@ function PanelBody({
                             [row.localKey]: e.target.value as OverlayVisibility,
                           }))
                         }
-                        className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-zinc-200 focus:border-cyan-500/50 focus:outline-none"
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-2 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                       >
                         <option value="all">Synlig: alle</option>
                         <option value="admins">Kun admin</option>
@@ -618,7 +618,7 @@ function PanelBody({
                         type="button"
                         disabled={pending}
                         onClick={() => onPublishOne(row)}
-                        className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+                        className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
                       >
                         Publiser
                       </button>
