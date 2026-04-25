@@ -84,6 +84,55 @@ export async function createUser(formData: FormData) {
   redirect("/dashboard/settings/users?success=1");
 }
 
+export async function updateUser(formData: FormData) {
+  const targetId = String(formData.get("user_id") ?? "").trim();
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const requestedRoleRaw = String(formData.get("role") ?? "").trim();
+
+  if (!targetId) redirect("/dashboard/settings/users?error=Mangler+bruker-ID");
+  if (!fullName) redirect("/dashboard/settings/users?error=Navn+er+påkrevd");
+  if (!isAssignableRole(requestedRoleRaw)) redirect("/dashboard/settings/users?error=Ugyldig+rolle");
+  const requestedRole = requestedRoleRaw as AppRole;
+
+  const actionClient = await createClient();
+  const { data: { user: currentUser } } = await actionClient.auth.getUser();
+  if (!currentUser) redirect("/auth/login");
+
+  const { data: currentProfileData } = await actionClient
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+  const currentProfile = currentProfileData as CompanyProfile | null;
+  if (!currentProfile?.company_id || !isAdminRole(currentProfile.role))
+    redirect("/dashboard/settings/users?error=Du+har+ikke+tilgang");
+
+  const adminClient = createAdminClient();
+
+  const { data: targetData } = await adminClient
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", targetId)
+    .maybeSingle();
+  const target = targetData as CompanyProfile | null;
+  if (!target || target.company_id !== currentProfile.company_id)
+    redirect("/dashboard/settings/users?error=Bruker+ikke+funnet");
+
+  if (requestedRole === "owner" && currentProfile.role !== "owner")
+    redirect("/dashboard/settings/users?error=Kun+owner+kan+sette+owner-rolle");
+  if (target.role === "owner" && currentProfile.role !== "owner")
+    redirect("/dashboard/settings/users?error=Kan+ikke+endre+owner");
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ full_name: fullName, phone: phone || null, role: requestedRole })
+    .eq("id", targetId);
+  if (error) redirect(`/dashboard/settings/users?error=${encodeURIComponent(error.message)}`);
+
+  redirect("/dashboard/settings/users?success=updated");
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function canDeleteUser(deleterRole: string, targetRole: string): boolean {

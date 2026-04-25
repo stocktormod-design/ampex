@@ -176,6 +176,28 @@ export async function updateProjectStatus(formData: FormData) {
   redirect(`${projectPath(projectId)}?success=status-updated`);
 }
 
+export async function updateProject(formData: FormData) {
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (!projectId || !name) redirect("/dashboard/projects?error=Mangler+data");
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const projectCheck = await ensureProjectInCompany(adminClient, projectId, companyId);
+  if (!projectCheck.ok) redirectProjectError(projectId, projectCheck.error);
+
+  const { error } = await adminClient
+    .from("projects")
+    .update({ name, description: description || null })
+    .eq("id", projectId);
+
+  if (error) redirectProjectError(projectId, error.message);
+
+  revalidatePath(projectPath(projectId));
+  revalidatePath("/dashboard/projects");
+  redirect(`${projectPath(projectId)}?success=project-updated`);
+}
+
 export async function createProject(formData: FormData) {
   const { userId, companyId, adminClient } = await requireAdminContext();
 

@@ -7,6 +7,7 @@ import {
   updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
+import { ProjectEditHeader } from "@/app/dashboard/projects/[projectId]/project-edit-header";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -121,6 +122,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const successMsg = (() => {
     if (!searchParams?.success) return null;
     if (searchParams.success === "status-updated") return "Status oppdatert.";
+    if (searchParams.success === "project-updated") return "Prosjekt oppdatert.";
     if (searchParams.success === "upload-ok") return "Tegning lastet opp.";
     if (searchParams.success === "published") return "Tegning publisert.";
     if (searchParams.success === "unpublished") return "Tegning satt til utkast.";
@@ -142,10 +144,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <ChevronLeft className="size-3.5" aria-hidden />
           Prosjekter
         </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{project.name}</h1>
+        {isAdmin ? (
+          <ProjectEditHeader
+            projectId={project.id}
+            name={project.name}
+            description={project.description}
+            statusBadge={
               <span
                 className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                   STATUS_COLOR[project.status] ?? STATUS_COLOR.planning
@@ -153,27 +157,50 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               >
                 {STATUS_LABEL[project.status] ?? project.status}
               </span>
-            </div>
-            {project.description && (
-              <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
-            )}
-            <p className="mt-1 text-xs text-muted-foreground">
-              Opprettet {fmtDate(project.created_at)}
-              {drawings.length > 0 && (
-                <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+            }
+            meta={
+              <p className="text-xs text-muted-foreground">
+                Opprettet {fmtDate(project.created_at)}
+                {drawings.length > 0 && (
+                  <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+                )}
+              </p>
+            }
+            actionButton={
+              <Link
+                href={showUpload ? `/dashboard/projects/${projectId}` : `/dashboard/projects/${projectId}?new=1`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+              >
+                <Plus className="size-4" aria-hidden />
+                Last opp
+              </Link>
+            }
+          />
+        ) : (
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{project.name}</h1>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    STATUS_COLOR[project.status] ?? STATUS_COLOR.planning
+                  }`}
+                >
+                  {STATUS_LABEL[project.status] ?? project.status}
+                </span>
+              </div>
+              {project.description && (
+                <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
               )}
-            </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Opprettet {fmtDate(project.created_at)}
+                {drawings.length > 0 && (
+                  <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+                )}
+              </p>
+            </div>
           </div>
-          {isAdmin && (
-            <Link
-              href={showUpload ? `/dashboard/projects/${projectId}` : `/dashboard/projects/${projectId}?new=1`}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
-            >
-              <Plus className="size-4" aria-hidden />
-              Last opp
-            </Link>
-          )}
-        </div>
+        )}
       </div>
 
       {/* ── Status change (admin) ── */}

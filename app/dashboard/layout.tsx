@@ -107,6 +107,7 @@ export default async function DashboardLayout({
         canViewProjects={canViewProjects}
         canManageLager={canManageLager}
         canManageUsers={canManageUsers}
+        signOut={signOut}
       />
     </div>
   );

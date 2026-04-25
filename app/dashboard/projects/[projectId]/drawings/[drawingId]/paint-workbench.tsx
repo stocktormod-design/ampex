@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { publishOverlayItem } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
@@ -241,6 +241,10 @@ type PanelBodyProps = {
   pending: boolean;
   publishError: string | null;
   onPublishOne: (row: DraftPublishRow) => void;
+  onPublishAll: () => void;
+  publishingAll: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 };
 
 function PanelBody({
@@ -263,6 +267,10 @@ function PanelBody({
   pending,
   publishError,
   onPublishOne,
+  onPublishAll,
+  publishingAll,
+  onUndo,
+  onRedo,
 }: PanelBodyProps) {
   return (
     <>
@@ -314,6 +322,28 @@ function PanelBody({
             <span className="text-xs font-semibold text-zinc-200">{activeLayer.name}</span>
           </div>
         )}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onUndo}
+            title="Angre (Ctrl+Z)"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7V4m0 3l3-3M3 7a6 6 0 109 0" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            title="Gjør om (Ctrl+Y)"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7V4m0 3l-3-3M13 7a6 6 0 11-9 0" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Scrollable content */}
@@ -503,11 +533,23 @@ function PanelBody({
         {/* ── DRAFTS TAB ── */}
         {activeTab === "drafts" && (
           <div className="space-y-4 px-4 py-4">
-            <div>
-              <h2 className="text-sm font-bold text-zinc-100">Utkast</h2>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-                Lagres lokalt. Publiser hvert element med ønsket synlighet.
-              </p>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-bold text-zinc-100">Utkast</h2>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                  Lagres lokalt. Publiser hvert element med ønsket synlighet.
+                </p>
+              </div>
+              {draftRows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={onPublishAll}
+                  disabled={publishingAll || pending}
+                  className="shrink-0 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+                >
+                  {publishingAll ? "Publiserer…" : "Publiser alle"}
+                </button>
+              )}
             </div>
 
             {publishError && (
@@ -584,7 +626,42 @@ export function PaintWorkbench({
   initialPublished,
 }: Props) {
   const [activeTool, setActiveTool] = useState<ToolId>("detector");
-  const [layers, setLayers] = useState<OverlayLayer[]>([newLayer(1)]);
+  const [layers, setLayersRaw] = useState<OverlayLayer[]>([newLayer(1)]);
+  const layersRef = useRef<OverlayLayer[]>(layers);
+  const historyRef = useRef<OverlayLayer[][]>([]);
+  const historyIdxRef = useRef(-1);
+
+  function setLayers(next: OverlayLayer[]) {
+    layersRef.current = next;
+    setLayersRaw(next);
+  }
+
+  function initHistory(initial: OverlayLayer[]) {
+    historyRef.current = [JSON.parse(JSON.stringify(initial))];
+    historyIdxRef.current = 0;
+  }
+
+  const setLayersWithHistory = useCallback((updater: (prev: OverlayLayer[]) => OverlayLayer[]) => {
+    const next = updater(layersRef.current);
+    historyRef.current = [...historyRef.current.slice(0, historyIdxRef.current + 1), JSON.parse(JSON.stringify(next))].slice(-51);
+    historyIdxRef.current = historyRef.current.length - 1;
+    layersRef.current = next;
+    setLayersRaw(next);
+  }, []);
+
+  function undo() {
+    if (historyIdxRef.current <= 0) return;
+    historyIdxRef.current -= 1;
+    const state = JSON.parse(JSON.stringify(historyRef.current[historyIdxRef.current])) as OverlayLayer[];
+    setLayers(state);
+  }
+
+  function redo() {
+    if (historyIdxRef.current >= historyRef.current.length - 1) return;
+    historyIdxRef.current += 1;
+    const state = JSON.parse(JSON.stringify(historyRef.current[historyIdxRef.current])) as OverlayLayer[];
+    setLayers(state);
+  }
   const [activeLayerId, setActiveLayerId] = useState<string>("");
   const [publishedOverlays, setPublishedOverlays] = useState<PublishedOverlay[]>(initialPublished);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -604,6 +681,7 @@ export function PaintWorkbench({
       const fallback = [newLayer(1)];
       setLayers(fallback);
       setActiveLayerId(fallback[0].id);
+      initHistory(fallback);
       return;
     }
     try {
@@ -621,14 +699,17 @@ export function PaintWorkbench({
         const fallback = [newLayer(1)];
         setLayers(fallback);
         setActiveLayerId(fallback[0].id);
+        initHistory(fallback);
       } else {
         setLayers(cleaned);
         setActiveLayerId(cleaned[0].id);
+        initHistory(cleaned);
       }
     } catch {
       const fallback = [newLayer(1)];
       setLayers(fallback);
       setActiveLayerId(fallback[0].id);
+      initHistory(fallback);
     }
   }, [storageKey]);
 
@@ -660,6 +741,21 @@ export function PaintWorkbench({
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+
+      // Undo: Ctrl+Z / Cmd+Z
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key === "z") {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      // Redo: Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y
+      if (((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === "z") ||
+          ((event.ctrlKey || event.metaKey) && event.key === "y")) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tool = TOOL_KEY_BINDINGS[event.key];
       if (!tool) return;
@@ -679,7 +775,7 @@ export function PaintWorkbench({
   }, [selectedDraftDetector]);
 
   function addLayer() {
-    setLayers((prev) => {
+    setLayersWithHistory((prev) => {
       const layer = newLayer(prev.length + 1);
       setActiveLayerId(layer.id);
       return [...prev, layer];
@@ -687,11 +783,13 @@ export function PaintWorkbench({
   }
 
   function toggleLayer(layerId: string) {
-    setLayers((prev) => prev.map((l) => (l.id === layerId ? { ...l, visible: !l.visible } : l)));
+    setLayersWithHistory((prev) =>
+      prev.map((l) => (l.id === layerId ? { ...l, visible: !l.visible } : l)),
+    );
   }
 
   function clearActiveLayer() {
-    setLayers((prev) => prev.map((l) => (l.id === activeLayerId ? { ...l, items: [] } : l)));
+    setLayersWithHistory((prev) => prev.map((l) => (l.id === activeLayerId ? { ...l, items: [] } : l)));
     setSelectedDraftDetector(null);
   }
 
@@ -747,10 +845,10 @@ export function PaintWorkbench({
   );
 
   function removeDraftRow(row: DraftPublishRow) {
-    setLayers((prev) =>
+    setLayersWithHistory((prev) =>
       prev.map((layer) =>
         layer.id === row.layerId
-          ? { ...layer, items: layer.items.filter((_, idx) => idx !== row.indexInLayer) }
+          ? { ...layer, items: layer.items.filter((item) => item.id !== row.item.id) }
           : layer,
       ),
     );
@@ -758,7 +856,7 @@ export function PaintWorkbench({
 
   function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist>) {
     if (!selectedDraftDetector) return;
-    setLayers((prev) =>
+    setLayersWithHistory((prev) =>
       prev.map((layer) => {
         if (layer.id !== selectedDraftDetector.layerId) return layer;
         return {
@@ -791,6 +889,56 @@ export function PaintWorkbench({
       reader.readAsDataURL(file);
     });
     updateSelectedDetectorChecklist({ photoDataUrl: dataUrl });
+  }
+
+  const [publishingAll, setPublishingAll] = useState(false);
+
+  async function publishAllDrafts() {
+    if (publishingAll || draftRows.length === 0) return;
+    setPublishingAll(true);
+    setPublishError(null);
+    const snapshot = [...draftRows];
+    for (const row of snapshot) {
+      const visibility = visibilityMap[row.localKey] ?? "all";
+      const result = await publishOverlayItem({
+        drawingId,
+        toolType: row.item.type,
+        layerName: row.layerName,
+        layerColor: row.layerColor,
+        visibilityScope: visibility,
+        payload: row.item,
+      });
+      if (!result.ok) {
+        setPublishError(result.error);
+        setPublishingAll(false);
+        return;
+      }
+      const data = result.data as {
+        id: string;
+        drawing_id: string;
+        created_by: string;
+        tool_type: ToolId;
+        layer_name: string;
+        layer_color: string;
+        payload: OverlayItem;
+        visibility_scope: OverlayVisibility;
+      };
+      setPublishedOverlays((prev) => [
+        ...prev,
+        {
+          id: data.id,
+          drawingId: data.drawing_id,
+          createdBy: data.created_by,
+          toolType: data.tool_type,
+          layerName: data.layer_name,
+          layerColor: data.layer_color,
+          payload: data.payload,
+          visibilityScope: data.visibility_scope,
+        },
+      ]);
+      removeDraftRow(row);
+    }
+    setPublishingAll(false);
   }
 
   function publishOne(row: DraftPublishRow) {
@@ -859,6 +1007,10 @@ export function PaintWorkbench({
     pending,
     publishError,
     onPublishOne: publishOne,
+    onPublishAll: publishAllDrafts,
+    publishingAll,
+    onUndo: undo,
+    onRedo: redo,
   };
 
   return (
@@ -892,7 +1044,7 @@ export function PaintWorkbench({
             publishedLayers={publishedLayers}
             draftLayers={layers}
             activeLayerId={activeLayerId}
-            onUpdateLayers={setLayers}
+            onUpdateLayers={setLayersWithHistory}
             selectedDraftDetector={selectedDraftDetector}
             onSelectDraftDetector={setSelectedDraftDetector}
             panelOpen={panelOpen}

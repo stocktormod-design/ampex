@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createUser } from "@/app/dashboard/settings/users/actions";
 import { DeleteUserForm } from "@/app/dashboard/settings/users/delete-user-form";
+import { UserEditRow } from "@/app/dashboard/settings/users/user-edit-row";
 import { createClient } from "@/lib/supabase/server";
-import { roleLabel } from "@/lib/roles";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
@@ -29,13 +29,6 @@ type CompanyUser = {
   role: string;
   created_at: string;
 };
-
-function roleColor(role: string) {
-  if (role === "owner")     return "bg-primary/10 text-primary";
-  if (role === "admin")     return "bg-secondary text-secondary-foreground";
-  if (role === "apprentice") return "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
-  return "bg-muted text-muted-foreground";
-}
 
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const supabase = await createClient();
@@ -168,6 +161,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
           <AlertDescription>Brukeren ble slettet.</AlertDescription>
         </Alert>
       )}
+      {searchParams?.success === "updated" && !showForm && (
+        <Alert>
+          <AlertDescription>Bruker oppdatert.</AlertDescription>
+        </Alert>
+      )}
 
       {/* ── Users list ── */}
       {users.length === 0 ? (
@@ -177,41 +175,19 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           {users.map((u) => (
-            <li key={u.id} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-              {/* Avatar initials */}
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                {(u.full_name?.trim()[0] ?? "?").toUpperCase()}
-              </div>
-
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-foreground">
-                  {u.full_name?.trim() || "Uten navn"}
-                  {u.id === user.id && (
-                    <span className="ml-2 text-xs text-muted-foreground">(deg)</span>
-                  )}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {u.phone?.trim() || "—"}
-                </p>
-              </div>
-
-              {/* Role badge */}
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${roleColor(u.role)}`}
-              >
-                {roleLabel(u.role)}
-              </span>
-
-              {/* Delete */}
-              <div className="shrink-0">
+            <UserEditRow
+              key={u.id}
+              user={u}
+              currentUserId={user.id}
+              currentUserRole={profile.role}
+              deleteSlot={
                 <DeleteUserForm
                   userId={u.id}
                   displayName={u.full_name?.trim() || "Uten navn"}
                   disabled={!mayDelete(u)}
                 />
-              </div>
-            </li>
+              }
+            />
           ))}
         </ul>
       )}
