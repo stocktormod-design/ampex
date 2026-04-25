@@ -54,17 +54,23 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
 
   const { data: projectsData } = await supabase
     .from("projects")
-    .select("id, name, description, status, created_at")
+    .select("id, name, description, status, created_at, drawings(count)")
     .eq("company_id", profile.company_id)
     .order("created_at", { ascending: false });
-  const projects = (projectsData ?? []) as ProjectRow[];
+  const projects = (projectsData ?? []).map((p) => {
+    const raw = p as typeof p & { drawings?: { count: number }[] };
+    return {
+      ...raw,
+      drawingCount: raw.drawings?.[0]?.count ?? 0,
+    };
+  }) as (ProjectRow & { drawingCount: number })[];
 
   const q            = searchParams?.q?.trim().toLowerCase() ?? "";
   const statusFilter = searchParams?.status ?? "all";
   const showForm     = searchParams?.new === "1";
   const canManage    = isAdminRole(profile.role);
 
-  const filtered = projects.filter((p) => {
+  const filtered = (projects as (ProjectRow & { drawingCount: number })[]).filter((p) => {
     if (statusFilter !== "all" && p.status !== statusFilter) return false;
     if (!q) return true;
     return (
@@ -207,11 +213,16 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-foreground">{project.name}</p>
-                  {project.description && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {project.description}
-                    </p>
-                  )}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {project.description ? (
+                      <span className="truncate">{project.description}</span>
+                    ) : null}
+                    {project.drawingCount > 0 && (
+                      <span className={project.description ? "ml-2" : ""}>
+                        {project.drawingCount} tegning{project.drawingCount === 1 ? "" : "er"}
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${

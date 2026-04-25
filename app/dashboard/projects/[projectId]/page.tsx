@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Pencil, FileText, Eye } from "lucide-react";
+import { Plus, Pencil, FileText, Eye, ChevronLeft } from "lucide-react";
 import {
   convertProjectImagesToPdf,
   deleteDraftDrawing,
+  updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
 import { NativeInput } from "@/components/ui/native-input";
@@ -40,6 +41,19 @@ type ProjectRow = {
   name: string;
   description: string | null;
   status: string;
+  created_at: string;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  planning: "Planlegging",
+  active: "Aktiv",
+  completed: "Ferdig",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  planning: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  completed: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
 function fmtDate(value: string | null): string {
@@ -69,7 +83,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const { data: projectData } = await supabase
     .from("projects")
-    .select("id, name, description, status")
+    .select("id, name, description, status, created_at")
     .eq("id", projectId)
     .maybeSingle();
   const project = projectData as ProjectRow | null;
@@ -87,6 +101,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const view         = isAdmin ? requestedView : "published";
   const showUpload   = searchParams?.new === "1" && isAdmin;
 
+  const publishedCount = drawings.filter((d) => d.is_published).length;
+  const draftCount = drawings.filter((d) => !d.is_published).length;
+
   const visible = drawings.filter((row) => {
     if (view === "draft"     && row.is_published)  return false;
     if (view === "published" && !row.is_published) return false;
@@ -99,23 +116,53 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   });
 
   const uploadAction = uploadDrawingPdf.bind(null, project.id);
+  const updateStatusAction = updateProjectStatus;
+
+  const successMsg = (() => {
+    if (!searchParams?.success) return null;
+    if (searchParams.success === "status-updated") return "Status oppdatert.";
+    if (searchParams.success === "upload-ok") return "Tegning lastet opp.";
+    if (searchParams.success === "published") return "Tegning publisert.";
+    if (searchParams.success === "unpublished") return "Tegning satt til utkast.";
+    if (searchParams.success === "draft-deleted") return "Utkast slettet.";
+    if (searchParams.success.startsWith("converted-")) {
+      return `Konverterte ${searchParams.success.replace("converted-", "")} filer til PDF.`;
+    }
+    return null;
+  })();
 
   return (
     <div className="space-y-6">
-      {/* ── Back + header ── */}
+      {/* ── Breadcrumb + header ── */}
       <div>
         <Link
           href="/dashboard/projects"
           className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
-          ← Prosjekter
+          <ChevronLeft className="size-3.5" aria-hidden />
+          Prosjekter
         </Link>
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{project.name}</h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{project.name}</h1>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  STATUS_COLOR[project.status] ?? STATUS_COLOR.planning
+                }`}
+              >
+                {STATUS_LABEL[project.status] ?? project.status}
+              </span>
+            </div>
             {project.description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{project.description}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Opprettet {fmtDate(project.created_at)}
+              {drawings.length > 0 && (
+                <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+              )}
+            </p>
           </div>
           {isAdmin && (
             <Link
@@ -129,17 +176,39 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         </div>
       </div>
 
+      {/* ── Status change (admin) ── */}
+      {isAdmin && (
+        <form action={updateStatusAction} className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="project_id" value={project.id} />
+          <span className="text-xs font-medium text-muted-foreground">Endre status:</span>
+          {(["planning", "active", "completed"] as const).map((s) => (
+            <button
+              key={s}
+              type="submit"
+              name="status"
+              value={s}
+              disabled={project.status === s}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
+                project.status === s
+                  ? `${STATUS_COLOR[s]} opacity-60 cursor-default`
+                  : "border border-border bg-background hover:bg-muted"
+              }`}
+            >
+              {STATUS_LABEL[s]}
+            </button>
+          ))}
+        </form>
+      )}
+
       {/* ── Feedback ── */}
       {searchParams?.error && (
         <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {searchParams.error}
         </p>
       )}
-      {searchParams?.success && (
+      {successMsg && (
         <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          {searchParams.success.startsWith("converted-")
-            ? `Konverterte ${searchParams.success.replace("converted-", "")} filer til PDF.`
-            : "Endringen ble lagret."}
+          {successMsg}
         </p>
       )}
 
@@ -215,9 +284,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               defaultValue={view}
               className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="all">Alle</option>
-              <option value="published">Publisert</option>
-              <option value="draft">Utkast</option>
+              <option value="all">Alle ({drawings.length})</option>
+              <option value="published">Publisert ({publishedCount})</option>
+              <option value="draft">Utkast ({draftCount})</option>
             </select>
           )}
           <SubmitButton variant="outline" className="shrink-0">Søk</SubmitButton>
@@ -259,6 +328,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {row.revision ? `Rev. ${row.revision} · ` : ""}
                     {fmtDate(row.created_at)}
+                    {row.is_published && row.published_at && row.published_at !== row.created_at && (
+                      <> · Publisert {fmtDate(row.published_at)}</>
+                    )}
                   </p>
                 </div>
 

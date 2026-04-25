@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, Package, Users, LayoutGrid } from "lucide-react";
+import { FolderKanban, Package, Users, LayoutGrid, House, BookOpen } from "lucide-react";
 
 type NavProps = {
   canViewProjects: boolean;
@@ -17,8 +17,11 @@ type NavItem = {
 };
 
 function buildLinks(props: NavProps): NavItem[] {
-  const links: NavItem[] = [];
+  const links: NavItem[] = [
+    { href: "/dashboard", label: "Hjem", exact: true },
+  ];
   if (props.canViewProjects) links.push({ href: "/dashboard/projects", label: "Prosjekter" });
+  links.push({ href: "/dashboard/protokoller", label: "Protokoller" });
   if (props.canManageLager)  links.push({ href: "/dashboard/lager",    label: "Lager" });
   if (props.canManageUsers)  links.push({ href: "/dashboard/settings/users", label: "Brukere" });
   return links;
@@ -55,9 +58,11 @@ export function DashboardNavLinks(props: NavProps) {
 
 /* ── Mobile bottom tab bar ── */
 const ICONS: Record<string, typeof FolderKanban> = {
-  "/dashboard/projects":       FolderKanban,
-  "/dashboard/lager":          Package,
-  "/dashboard/settings/users": Users,
+  "/dashboard":                 House,
+  "/dashboard/projects":        FolderKanban,
+  "/dashboard/protokoller":     BookOpen,
+  "/dashboard/lager":           Package,
+  "/dashboard/settings/users":  Users,
 };
 
 export function MobileBottomNav(props: NavProps) {
@@ -72,13 +77,15 @@ export function MobileBottomNav(props: NavProps) {
     >
       <div className="flex h-[3.75rem] items-stretch">
         {links.map((link) => {
-          const isActive = pathname.startsWith(link.href);
+          const isActive = link.exact
+            ? pathname === link.href
+            : pathname.startsWith(link.href);
           const Icon = ICONS[link.href] ?? LayoutGrid;
           return (
             <Link
               key={link.href}
               href={link.href}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+              className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
                 isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >

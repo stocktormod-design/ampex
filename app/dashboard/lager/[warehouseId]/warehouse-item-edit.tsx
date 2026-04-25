@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateWarehouseItem } from "@/app/dashboard/lager/actions";
+import { updateWarehouseItem, deleteWarehouseItem } from "@/app/dashboard/lager/actions";
 
 export type WarehouseItemRow = {
   id: string;
@@ -18,6 +18,7 @@ type Props = {
 
 export function WarehouseItemEdit({ warehouseId, item }: Props) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [barcodeLines, setBarcodeLines] = useState<string[]>([""]);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(0);
@@ -31,12 +32,14 @@ export function WarehouseItemEdit({ warehouseId, item }: Props) {
     setQuantity(item.quantity);
     setUnit(item.unit || "stk");
     setError(null);
+    setConfirmDelete(false);
     setOpen(true);
   }
 
   function closeDialog() {
     setOpen(false);
     setError(null);
+    setConfirmDelete(false);
   }
 
   function addBarcodeLine() {
@@ -62,6 +65,19 @@ export function WarehouseItemEdit({ warehouseId, item }: Props) {
       });
       if (!res.ok) {
         setError(res.error);
+        return;
+      }
+      closeDialog();
+    });
+  }
+
+  function onDelete() {
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteWarehouseItem(warehouseId, item.id);
+      if (!res.ok) {
+        setError(res.error);
+        setConfirmDelete(false);
         return;
       }
       closeDialog();
@@ -190,22 +206,55 @@ export function WarehouseItemEdit({ warehouseId, item }: Props) {
               </p>
             ) : null}
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium hover:bg-muted"
-              >
-                Avbryt
-              </button>
-              <button
-                type="button"
-                disabled={pending || !name.trim()}
-                onClick={onSave}
-                className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                Lagre
-              </button>
+            <div className="mt-4 flex items-center justify-between gap-2">
+              {/* Delete zone */}
+              {!confirmDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={pending}
+                  className="text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+                >
+                  Slett vare
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Sikker?</span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={onDelete}
+                    className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                  >
+                    Ja, slett
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Avbryt
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeDialog}
+                  className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
+                >
+                  Avbryt
+                </button>
+                <button
+                  type="button"
+                  disabled={pending || !name.trim()}
+                  onClick={onSave}
+                  className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  Lagre
+                </button>
+              </div>
             </div>
           </div>
         </div>

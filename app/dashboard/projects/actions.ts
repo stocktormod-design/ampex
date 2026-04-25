@@ -149,6 +149,33 @@ function rowToOwned(data: unknown): DrawingOwnedRow {
   return data as DrawingOwnedRow;
 }
 
+export async function updateProjectStatus(formData: FormData) {
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  const status = String(formData.get("status") ?? "").trim();
+  if (!projectId || !PROJECT_STATUS.has(status)) {
+    redirect("/dashboard/projects?error=Ugyldig+statusendring");
+  }
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const projectCheck = await ensureProjectInCompany(adminClient, projectId, companyId);
+  if (!projectCheck.ok) {
+    redirectProjectError(projectId, projectCheck.error);
+  }
+
+  const { error } = await adminClient
+    .from("projects")
+    .update({ status })
+    .eq("id", projectId);
+
+  if (error) {
+    redirectProjectError(projectId, error.message);
+  }
+
+  revalidatePath(projectPath(projectId));
+  revalidatePath("/dashboard/projects");
+  redirect(`${projectPath(projectId)}?success=status-updated`);
+}
+
 export async function createProject(formData: FormData) {
   const { userId, companyId, adminClient } = await requireAdminContext();
 

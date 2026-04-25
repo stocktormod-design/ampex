@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 type ProfileRow = {
   company_id: string | null;
   role: string;
+  full_name: string | null;
   companies: { name: string } | null;
 } | null;
 
@@ -23,7 +24,7 @@ export default async function DashboardLayout({
 
   const { data: profileData } = await supabase
     .from("profiles")
-    .select("company_id, role, companies(name)")
+    .select("company_id, role, full_name, companies(name)")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -51,7 +52,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-border/60 bg-background/95 px-4 backdrop-blur-md sm:px-6">
         {/* Brand */}
         <Link
-          href="/dashboard/projects"
+          href="/dashboard"
           className="flex shrink-0 items-center gap-2 font-bold tracking-tight text-foreground"
         >
           Ampex
@@ -71,11 +72,14 @@ export default async function DashboardLayout({
           />
         </div>
 
-        {/* Right: email + sign-out */}
+        {/* Right: name/email + sign-out */}
         <div className="ml-auto flex items-center gap-4">
-          <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:block">
-            {user.email}
-          </span>
+          <Link
+            href="/dashboard/settings/profile"
+            className="hidden max-w-[180px] truncate text-xs text-muted-foreground transition-colors hover:text-foreground sm:block"
+          >
+            {profile?.full_name?.trim() ?? user.email}
+          </Link>
           <form action={signOut}>
             <button
               type="submit"

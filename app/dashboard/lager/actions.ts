@@ -237,3 +237,77 @@ export async function updateWarehouseItem(
   revalidatePath(`/dashboard/lager/${warehouseId}`);
   return { ok: true as const };
 }
+
+export async function deleteWarehouseItem(warehouseId: string, itemId: string) {
+  const { supabase, companyId } = await requireCompanyAdmin();
+
+  const { data: wh } = await supabase
+    .from("warehouses")
+    .select("id")
+    .eq("id", warehouseId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  if (!wh) {
+    return { ok: false as const, error: "Lager ikke funnet" };
+  }
+
+  const { error } = await supabase
+    .from("warehouse_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("warehouse_id", warehouseId);
+
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/lager/${warehouseId}`);
+  return { ok: true as const };
+}
+
+export async function adjustItemQuantity(
+  warehouseId: string,
+  itemId: string,
+  delta: number,
+) {
+  const { supabase, companyId } = await requireCompanyAdmin();
+
+  const { data: wh } = await supabase
+    .from("warehouses")
+    .select("id")
+    .eq("id", warehouseId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  if (!wh) {
+    return { ok: false as const, error: "Lager ikke funnet" };
+  }
+
+  const { data: item } = await supabase
+    .from("warehouse_items")
+    .select("id, quantity")
+    .eq("id", itemId)
+    .eq("warehouse_id", warehouseId)
+    .maybeSingle();
+
+  if (!item) {
+    return { ok: false as const, error: "Vare ikke funnet" };
+  }
+
+  const raw = item as { id: string; quantity: number };
+  const newQty = Math.max(0, raw.quantity + delta);
+
+  const { error } = await supabase
+    .from("warehouse_items")
+    .update({ quantity: newQty })
+    .eq("id", itemId)
+    .eq("warehouse_id", warehouseId);
+
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/lager/${warehouseId}`);
+  return { ok: true as const, newQuantity: newQty };
+}

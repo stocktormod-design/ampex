@@ -31,15 +31,19 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
 
   const { data: warehouses } = await supabase
     .from("warehouses")
-    .select("id, name, location, created_at")
+    .select("id, name, location, created_at, warehouse_items(count)")
     .eq("company_id", profile.company_id)
     .order("name", { ascending: true });
 
-  const rows = (warehouses ?? []) as {
-    id: string;
-    name: string;
-    location: string | null;
-  }[];
+  const rows = (warehouses ?? []).map((w) => {
+    const raw = w as typeof w & { warehouse_items?: { count: number }[] };
+    return {
+      id: raw.id as string,
+      name: raw.name as string,
+      location: raw.location as string | null,
+      itemCount: raw.warehouse_items?.[0]?.count ?? 0,
+    };
+  });
 
   const showForm = searchParams?.new === "1";
 
@@ -132,9 +136,10 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-foreground">{w.name}</p>
-                  {w.location && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{w.location}</p>
-                  )}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {w.location ? <span>{w.location} · </span> : null}
+                    {w.itemCount} vare{w.itemCount === 1 ? "" : "r"}
+                  </p>
                 </div>
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
               </Link>
