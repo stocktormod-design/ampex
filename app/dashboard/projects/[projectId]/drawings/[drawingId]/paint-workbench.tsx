@@ -7,6 +7,7 @@ import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[draw
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
 import type {
   DetectorChecklist,
+  PointChecklist,
   OverlayItem,
   OverlayLayer,
   OverlayVisibility,
@@ -27,12 +28,13 @@ const LAYER_COLORS = ["#ef4444", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0
 const TOOL_KEY_BINDINGS: Record<string, ToolId> = {
   "1": "select",
   "2": "detector",
-  "3": "line",
-  "4": "rect",
-  "5": "text",
-  "6": "erase",
+  "3": "point",
+  "4": "line",
+  "5": "rect",
+  "6": "text",
+  "7": "erase",
 };
-const PANEL_AUTO_OPEN_TOOLS = new Set<ToolId>(["select", "detector"]);
+const PANEL_AUTO_OPEN_TOOLS = new Set<ToolId>(["select", "detector", "point"]);
 const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
@@ -70,7 +72,7 @@ type DraftPublishRow = {
 function isOverlayItem(value: unknown): value is OverlayItem {
   if (!value || typeof value !== "object") return false;
   const v = value as { type?: unknown };
-  return v.type === "detector" || v.type === "line" || v.type === "rect" || v.type === "text";
+  return v.type === "detector" || v.type === "point" || v.type === "line" || v.type === "rect" || v.type === "text";
 }
 
 function toChecklist(value?: DetectorChecklist): DetectorChecklist {
@@ -81,6 +83,16 @@ function toChecklist(value?: DetectorChecklist): DetectorChecklist {
     capOn: v.capOn === "yes" || v.capOn === "no" ? v.capOn : null,
     comment: typeof v.comment === "string" ? v.comment : "",
     serialNumber: typeof v.serialNumber === "string" ? v.serialNumber : "",
+    photoDataUrl: typeof v.photoDataUrl === "string" ? v.photoDataUrl : null,
+    photoPath: typeof v.photoPath === "string" ? v.photoPath : null,
+    updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
+  };
+}
+
+function toPointChecklist(value?: PointChecklist): PointChecklist {
+  const v = (value ?? {}) as Partial<PointChecklist>;
+  return {
+    comment: typeof v.comment === "string" ? v.comment : "",
     photoDataUrl: typeof v.photoDataUrl === "string" ? v.photoDataUrl : null,
     photoPath: typeof v.photoPath === "string" ? v.photoPath : null,
     updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
@@ -228,11 +240,12 @@ type PanelBodyProps = {
   activeLayerId: string;
   onSetActiveLayerId: (id: string) => void;
   checklist: DetectorChecklist | null;
+  pointChecklist: PointChecklist | null;
   selectedDraftDetectorItem: {
     layer: OverlayLayer;
-    item: Extract<OverlayItem, { type: "detector" }>;
+    item: Extract<OverlayItem, { type: "detector" }> | Extract<OverlayItem, { type: "point" }>;
   } | null;
-  onUpdateChecklist: (next: Partial<DetectorChecklist>) => void;
+  onUpdateChecklist: (next: Partial<DetectorChecklist> | Partial<PointChecklist>) => void;
   onAttachPhoto: (file: File | null) => Promise<void>;
   draftError: string | null;
   draftRows: DraftPublishRow[];
@@ -257,6 +270,7 @@ function PanelBody({
   activeLayerId,
   onSetActiveLayerId,
   checklist,
+  pointChecklist,
   selectedDraftDetectorItem,
   onUpdateChecklist,
   onAttachPhoto,
@@ -383,53 +397,56 @@ function PanelBody({
                 )}
               </div>
 
-              {checklist && selectedDraftDetectorItem ? (
+              {selectedDraftDetectorItem ? (
                 <div className="space-y-3">
-                  <NeonCheckbox
-                    checked={checklist.baseMounted}
-                    onChange={(v) => onUpdateChecklist({ baseMounted: v })}
-                    label="Sokkel montert"
-                  />
-                  <NeonCheckbox
-                    checked={checklist.detectorMounted}
-                    onChange={(v) => onUpdateChecklist({ detectorMounted: v })}
-                    label="Detektor montert"
-                  />
+                  {selectedDraftDetectorItem.item.type === "detector" && checklist ? (
+                    <>
+                      <NeonCheckbox
+                        checked={checklist.baseMounted}
+                        onChange={(v) => onUpdateChecklist({ baseMounted: v })}
+                        label="Sokkel montert"
+                      />
+                      <NeonCheckbox
+                        checked={checklist.detectorMounted}
+                        onChange={(v) => onUpdateChecklist({ detectorMounted: v })}
+                        label="Detektor montert"
+                      />
 
-                  {/* Cap status */}
-                  <div>
-                    <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kappe</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["yes", "no"] as const).map((v) => {
-                        const active = checklist.capOn === v;
-                        return (
+                      <div>
+                        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kappe</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(["yes", "no"] as const).map((v) => {
+                            const active = checklist.capOn === v;
+                            return (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => onUpdateChecklist({ capOn: v })}
+                                className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
+                                  active
+                                    ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_16px_rgba(34,211,238,0.06)]"
+                                    : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                                }`}
+                              >
+                                {v === "yes" ? "Ja" : "Nei"}
+                              </button>
+                            );
+                          })}
                           <button
-                            key={v}
                             type="button"
-                            onClick={() => onUpdateChecklist({ capOn: v })}
+                            onClick={() => onUpdateChecklist({ capOn: null })}
                             className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
-                              active
-                                ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_16px_rgba(34,211,238,0.06)]"
-                                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                              checklist.capOn === null
+                                ? "border-zinc-600 bg-zinc-800 text-zinc-300"
+                                : "border-zinc-800 bg-zinc-900 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400"
                             }`}
                           >
-                            {v === "yes" ? "Ja" : "Nei"}
+                            —
                           </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => onUpdateChecklist({ capOn: null })}
-                        className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
-                          checklist.capOn === null
-                            ? "border-zinc-600 bg-zinc-800 text-zinc-300"
-                            : "border-zinc-800 bg-zinc-900 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400"
-                        }`}
-                      >
-                        —
-                      </button>
-                    </div>
-                  </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
 
                   {/* Comment */}
                   <div>
@@ -437,18 +454,20 @@ function PanelBody({
                       Kommentar
                     </label>
                     <textarea
-                      value={checklist.comment}
+                      value={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.comment : pointChecklist?.comment) ?? ""}
                       onChange={(e) => onUpdateChecklist({ comment: e.target.value })}
                       rows={3}
                       className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-700 transition-colors focus:border-cyan-500/50 focus:outline-none"
-                      placeholder="F.eks. Mangler strøm, følges opp..."
+                      placeholder={selectedDraftDetectorItem.item.type === "detector" ? "F.eks. Mangler strøm, følges opp..." : "Hva må følges opp her?"}
                     />
                   </div>
 
-                  <SerialNumberField
-                    serialNumber={checklist.serialNumber ?? ""}
-                    onUpdateSerialNumber={(value) => onUpdateChecklist({ serialNumber: value })}
-                  />
+                  {selectedDraftDetectorItem.item.type === "detector" && checklist ? (
+                    <SerialNumberField
+                      serialNumber={checklist.serialNumber ?? ""}
+                      onUpdateSerialNumber={(value) => onUpdateChecklist({ serialNumber: value })}
+                    />
+                  ) : null}
 
                   {/* Photo */}
                   <div>
@@ -489,9 +508,9 @@ function PanelBody({
                         />
                       </label>
                     </div>
-                    {checklist.photoDataUrl ? (
+                    {((selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? null) ? (
                       <img
-                        src={checklist.photoDataUrl}
+                        src={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? ""}
                         alt="Vedlegg"
                         className="mt-3 h-36 w-full rounded-xl border border-zinc-800 object-cover"
                       />
@@ -510,9 +529,9 @@ function PanelBody({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zm-7.518-.267A8.25 8.25 0 1120.25 10.5M8.288 14.212A5.25 5.25 0 1117.25 10.5" />
                     </svg>
                   </div>
-                  <p className="text-sm font-medium text-zinc-400">Velg et detektor-punkt</p>
+                  <p className="text-sm font-medium text-zinc-400">Velg et detektor- eller punkt-element</p>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-                    Trykk på et punkt i tegningen for å redigere statusen.
+                    Trykk på et element i tegningen for å redigere statusen.
                   </p>
                 </div>
               )}
@@ -522,7 +541,7 @@ function PanelBody({
             <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Tips</p>
               <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-zinc-600">
-                <li>• Trykk på et detektor-punkt for å redigere status</li>
+                <li>• Trykk på et detektor- eller punkt-element for status</li>
                 <li>• I linje-modus: dra i 4 håndtak for å bøye kurven</li>
                 <li>• Klyp for å zoome, bruk «Velg» + dra for å panorere</li>
               </ul>
@@ -835,7 +854,7 @@ export function PaintWorkbench({
     const layer = layers.find((l) => l.id === selectedDraftDetector.layerId);
     if (!layer) return null;
     const item = layer.items.find((i) => i.id === selectedDraftDetector.itemId);
-    if (!item || item.type !== "detector") return null;
+    if (!item || (item.type !== "detector" && item.type !== "point")) return null;
     return { layer, item };
   }, [layers, selectedDraftDetector]);
 
@@ -854,7 +873,7 @@ export function PaintWorkbench({
     );
   }
 
-  function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist>) {
+  function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist> | Partial<PointChecklist>) {
     if (!selectedDraftDetector) return;
     setLayersWithHistory((prev) =>
       prev.map((layer) => {
@@ -862,9 +881,16 @@ export function PaintWorkbench({
         return {
           ...layer,
           items: layer.items.map((item) => {
-            if (item.id !== selectedDraftDetector.itemId || item.type !== "detector") return item;
-            const current = toChecklist(item.checklist);
-            return { ...item, checklist: { ...current, ...next, updatedAt: new Date().toISOString() } };
+            if (item.id !== selectedDraftDetector.itemId) return item;
+            if (item.type === "detector") {
+              const current = toChecklist(item.checklist);
+              return { ...item, checklist: { ...current, ...(next as Partial<DetectorChecklist>), updatedAt: new Date().toISOString() } };
+            }
+            if (item.type === "point") {
+              const current = toPointChecklist(item.checklist);
+              return { ...item, checklist: { ...current, ...(next as Partial<PointChecklist>), updatedAt: new Date().toISOString() } };
+            }
+            return item;
           }),
         };
       }),
@@ -984,9 +1010,14 @@ export function PaintWorkbench({
     });
   }
 
-  const checklist = selectedDraftDetectorItem
-    ? toChecklist(selectedDraftDetectorItem.item.checklist)
-    : null;
+  const checklist =
+    selectedDraftDetectorItem?.item.type === "detector"
+      ? toChecklist(selectedDraftDetectorItem.item.checklist)
+      : null;
+  const pointChecklist =
+    selectedDraftDetectorItem?.item.type === "point"
+      ? toPointChecklist(selectedDraftDetectorItem.item.checklist)
+      : null;
 
   const panelBodyProps: Omit<PanelBodyProps, "onClose"> = {
     activeTab,
@@ -997,6 +1028,7 @@ export function PaintWorkbench({
     activeLayerId,
     onSetActiveLayerId: setActiveLayerId,
     checklist,
+    pointChecklist,
     selectedDraftDetectorItem,
     onUpdateChecklist: updateSelectedDetectorChecklist,
     onAttachPhoto,
@@ -1049,11 +1081,15 @@ export function PaintWorkbench({
             onSelectDraftDetector={setSelectedDraftDetector}
             panelOpen={panelOpen}
             onTogglePanel={() => setPanelOpen((v) => !v)}
+            onOpenStatusPanel={() => {
+              setActiveTab("status");
+              setPanelOpen(true);
+            }}
           />
         </div>
 
         {/* Mobile bottom toolbar – below canvas (never overlaps!) */}
-        <div className="shrink-0 border-t border-zinc-800/60 bg-zinc-950/98 backdrop-blur-sm sm:hidden">
+        <div className="relative z-30 shrink-0 border-t border-zinc-800/60 bg-zinc-950/98 backdrop-blur-sm sm:hidden">
           <PaintToolbar
             bottomBar
             panelOpen={panelOpen}

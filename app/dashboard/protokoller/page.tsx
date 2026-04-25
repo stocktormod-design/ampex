@@ -103,7 +103,7 @@ export default async function ProtokollListPage({ searchParams }: PageProps) {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Protokoller</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Prosedyrer</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {allProtocols.length} dokument{allProtocols.length === 1 ? "" : "er"}
             {unreadCount > 0 && (
@@ -199,7 +199,7 @@ export default async function ProtokollListPage({ searchParams }: PageProps) {
       {/* ── Upload form ── */}
       {isAdmin && showUpload && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold">Last opp protokoll</h2>
+          <h2 className="mb-4 text-base font-semibold">Last opp prosedyre</h2>
           <form action={uploadProtocol} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -319,7 +319,7 @@ export default async function ProtokollListPage({ searchParams }: PageProps) {
         <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
           <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
           <p className="text-sm font-medium text-muted-foreground">
-            {q || catFilter ? "Ingen protokoller matcher søket." : "Ingen protokoller ennå."}
+            {q || catFilter ? "Ingen prosedyrer matcher søket." : "Ingen prosedyrer ennå."}
           </p>
           {isAdmin && !showUpload && (
             <Link

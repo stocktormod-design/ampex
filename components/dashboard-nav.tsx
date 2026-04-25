@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   FolderKanban,
   ClipboardList,
@@ -15,6 +15,7 @@ import {
   X,
   User,
   LogOut,
+  ChevronsUpDown,
 } from "lucide-react";
 
 type BaseNavProps = {
@@ -35,7 +36,7 @@ function buildDesktopLinks(props: BaseNavProps): NavItem[] {
   if (props.canViewProjects) links.push({ href: "/dashboard/projects", label: "Prosjekter" });
   if (props.canViewProjects) links.push({ href: "/dashboard/ordre", label: "Ordre" });
   if (props.canViewInstallerInbox) links.push({ href: "/dashboard/installator/inbox", label: "Innboks" });
-  links.push({ href: "/dashboard/protokoller", label: "Protokoller" });
+  links.push({ href: "/dashboard/protokoller", label: "Prosedyrer" });
   if (props.canManageLager) links.push({ href: "/dashboard/lager", label: "Lager" });
   if (props.canManageUsers) links.push({ href: "/dashboard/settings/users", label: "Brukere" });
   return links;
@@ -73,15 +74,14 @@ export function DashboardNavLinks(props: BaseNavProps) {
 /* ── Mobile bottom tab bar ── */
 const PRIMARY_TABS = [
   { href: "/dashboard/lager",       label: "Lager",       Icon: Package      },
-  { href: "/dashboard/protokoller", label: "Protokoller", Icon: BookOpen     },
+  { href: "/dashboard/protokoller", label: "Prosedyrer", Icon: BookOpen     },
 ];
 
 export function MobileBottomNav(props: MobileNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [projectsMode, setProjectsMode] = useState<"projects" | "ordre">("projects");
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const holdTriggeredRef = useRef(false);
 
   const projectTab =
     projectsMode === "projects"
@@ -105,6 +105,13 @@ export function MobileBottomNav(props: MobileNavProps) {
   }, [projectsMode]);
 
   useEffect(() => {
+    router.prefetch("/dashboard/projects");
+    router.prefetch("/dashboard/ordre");
+    router.prefetch("/dashboard/lager");
+    router.prefetch("/dashboard/protokoller");
+  }, [router]);
+
+  useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
     window.addEventListener("keydown", onKey);
@@ -114,26 +121,12 @@ export function MobileBottomNav(props: MobileNavProps) {
   const onPrimaryTab = tabs.some((t) => pathname.startsWith(t.href));
   const isMoreActive = !onPrimaryTab;
 
-  function startHoldSwap() {
-    holdTriggeredRef.current = false;
-    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-    holdTimerRef.current = setTimeout(() => {
-      holdTriggeredRef.current = true;
-      setProjectsMode((prev) => {
-        const next = prev === "projects" ? "ordre" : "projects";
-        if (typeof window !== "undefined") {
-          window.location.href = next === "projects" ? "/dashboard/projects" : "/dashboard/ordre";
-        }
-        return next;
-      });
-    }, 500);
-  }
-
-  function endHoldSwap() {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
+  function cycleProjectsTab() {
+    setProjectsMode((prev) => {
+      const next = prev === "projects" ? "ordre" : "projects";
+      router.push(next === "projects" ? "/dashboard/projects" : "/dashboard/ordre");
+      return next;
+    });
   }
 
   return (
@@ -249,32 +242,33 @@ export function MobileBottomNav(props: MobileNavProps) {
           {tabs.map(({ href, label, Icon }, index) => {
             const isActive = pathname.startsWith(href);
             return (
-              <Link
-                key={href}
-                href={href}
-                onPointerDown={index === 0 ? startHoldSwap : undefined}
-                onPointerUp={index === 0 ? endHoldSwap : undefined}
-                onPointerCancel={index === 0 ? endHoldSwap : undefined}
-                onPointerLeave={index === 0 ? endHoldSwap : undefined}
-                onClick={index === 0 ? (e) => {
-                  if (holdTriggeredRef.current) {
-                    e.preventDefault();
-                    holdTriggeredRef.current = false;
-                  }
-                } : undefined}
-                className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
-                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon
-                  className={`size-5 transition-transform ${isActive ? "scale-105" : ""}`}
-                  aria-hidden
-                />
-                {label}
-                {isActive && (
-                  <span className="absolute bottom-0 h-0.5 w-8 rounded-full bg-foreground" />
+              <div key={href} className="relative flex flex-1">
+                <Link
+                  href={href}
+                  className={`relative flex w-full flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon
+                    className={`size-5 transition-transform ${isActive ? "scale-105" : ""}`}
+                    aria-hidden
+                  />
+                  {label}
+                  {isActive && (
+                    <span className="absolute bottom-0 h-0.5 w-8 rounded-full bg-foreground" />
+                  )}
+                </Link>
+                {index === 0 && (
+                  <button
+                    type="button"
+                    onClick={cycleProjectsTab}
+                    className="absolute right-1 top-1 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Bytt mellom Prosjekter og Ordre"
+                  >
+                    <ChevronsUpDown className="size-3" aria-hidden />
+                  </button>
                 )}
-              </Link>
+              </div>
             );
           })}
 

@@ -130,7 +130,7 @@ export default async function ProtocolDetailPage({ params, searchParams }: PageP
           className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
-          Protokoller
+          Prosedyrer
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">

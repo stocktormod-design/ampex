@@ -12,7 +12,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const PROJECT_STATUS = new Set(["planning", "active", "completed"]);
 const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
-const OVERLAY_TOOL_TYPES = new Set(["detector", "line", "rect", "text"]);
+const OVERLAY_TOOL_TYPES = new Set(["detector", "point", "line", "rect", "text"]);
 const OVERLAY_VISIBILITY = new Set(["all", "admins"]);
 const MAX_OVERLAY_PHOTO_BYTES = 2 * 1024 * 1024;
 

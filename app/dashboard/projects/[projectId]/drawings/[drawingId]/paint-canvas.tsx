@@ -16,6 +16,7 @@ type Props = {
   onSelectDraftDetector: (selection: { layerId: string; itemId: string } | null) => void;
   panelOpen?: boolean;
   onTogglePanel?: () => void;
+  onOpenStatusPanel?: () => void;
 };
 
 function fileExt(path: string): string {
@@ -33,10 +34,11 @@ const ZOOM_STEP = 0.25;
 const TOOL_SHORTCUT_LABEL: Record<ToolId, string> = {
   select: "1",
   detector: "2",
-  line: "3",
-  rect: "4",
-  text: "5",
-  erase: "6",
+  point: "3",
+  line: "4",
+  rect: "5",
+  text: "6",
+  erase: "7",
 };
 
 type DraftShape =
@@ -171,6 +173,32 @@ function drawItem(
     return;
   }
 
+  if (item.type === "point") {
+    const fillColor = "#f59e0b";
+    if (isSelectedDetector) {
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 13, 0, Math.PI * 2);
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.lineWidth = 2;
+    }
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = "#111827";
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("!", item.x, item.y + 0.5);
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+    return;
+  }
+
   if (item.type === "line") {
     const pts = linePoints(item);
     ctx.beginPath();
@@ -204,6 +232,7 @@ export function PaintCanvas({
   onSelectDraftDetector,
   panelOpen,
   onTogglePanel,
+  onOpenStatusPanel,
 }: Props) {
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
   const [manualZoom, setManualZoom] = useState(1);
@@ -220,6 +249,7 @@ export function PaintCanvas({
   const [selectedDraftLine, setSelectedDraftLine] = useState<ItemSelection | null>(null);
   const [dragLineHandle, setDragLineHandle] = useState<{ layerId: string; itemId: string; handle: LineHandle } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lastStatusTapRef = useRef<{ key: string; at: number } | null>(null);
   const ext = fileExt(filePath);
   const isPdf = ext === "pdf";
   const allLayers = useMemo(() => [...publishedLayers, ...draftLayers], [publishedLayers, draftLayers]);
@@ -425,13 +455,13 @@ export function PaintCanvas({
     );
   }
 
-  function findDraftDetectorAt(x: number, y: number) {
+  function findDraftStatusItemAt(x: number, y: number) {
     const hitRadius = 12;
     for (const layer of draftLayers) {
       if (!layer.visible) continue;
       for (let i = layer.items.length - 1; i >= 0; i -= 1) {
         const item = layer.items[i];
-        if (item.type !== "detector") continue;
+        if (item.type !== "detector" && item.type !== "point") continue;
         const displayX = item.x - docOffset.x;
         const displayY = item.y - docOffset.y;
         const dx = displayX - x;
@@ -469,7 +499,7 @@ export function PaintCanvas({
   }
 
   function findDraftItemAt(x: number, y: number): ItemSelection | null {
-    const detectorHit = findDraftDetectorAt(x, y);
+    const detectorHit = findDraftStatusItemAt(x, y);
     if (detectorHit) return detectorHit;
 
     for (const layer of draftLayers) {
@@ -505,7 +535,7 @@ export function PaintCanvas({
     const layer = draftLayers.find((l) => l.id === selection.layerId);
     const item = layer?.items.find((i) => i.id === selection.itemId);
     if (!item) return;
-    if (item.type === "detector") {
+    if (item.type === "detector" || item.type === "point") {
       onSelectDraftDetector(selection);
       setSelectedDraftLine(null);
     } else if (item.type === "line") {
@@ -607,7 +637,7 @@ export function PaintCanvas({
       for (const item of layer.items) {
         const displayItem = toDisplayItem(item);
         const isSelectedDetector =
-          item.type === "detector" &&
+          (item.type === "detector" || item.type === "point") &&
           selectedDraftDetector?.layerId === layer.id &&
           selectedDraftDetector?.itemId === item.id;
         const isSelectedItem = selectedDraftItem?.layerId === layer.id && selectedDraftItem?.itemId === item.id;
@@ -703,6 +733,32 @@ export function PaintCanvas({
       return;
     }
 
+    const statusHit = findDraftStatusItemAt(pt.x, pt.y);
+    if (activeTool === "line" && statusHit) {
+      const now = Date.now();
+      const key = `${statusHit.layerId}:${statusHit.itemId}`;
+      const prev = lastStatusTapRef.current;
+      const isFastDouble = Boolean(prev && prev.key === key && now - prev.at <= 280);
+      lastStatusTapRef.current = { key, at: now };
+      if (isFastDouble) {
+        selectItem(statusHit);
+        onOpenStatusPanel?.();
+      }
+      dragStartRef.current = docPt;
+      setDraft({
+        type: "line",
+        x1: docPt.x,
+        y1: docPt.y,
+        x2: docPt.x,
+        y2: docPt.y,
+        c1x: docPt.x,
+        c1y: docPt.y,
+        c2x: docPt.x,
+        c2y: docPt.y,
+      });
+      return;
+    }
+
     const hitItem = findDraftItemAt(pt.x, pt.y);
     if (hitItem) {
       selectItem(hitItem);
@@ -740,6 +796,23 @@ export function PaintCanvas({
       };
       addToActive(nextDetector);
       selectItem({ layerId: activeLayer.id, itemId: nextDetector.id });
+      return;
+    }
+    if (activeTool === "point") {
+      const nextPoint: OverlayItem = {
+        id: crypto.randomUUID(),
+        type: "point",
+        x: docPt.x,
+        y: docPt.y,
+        label: "!",
+        checklist: {
+          comment: "",
+          photoDataUrl: null,
+          updatedAt: null,
+        },
+      };
+      addToActive(nextPoint);
+      selectItem({ layerId: activeLayer.id, itemId: nextPoint.id });
       return;
     }
     if (activeTool === "text") {
@@ -892,6 +965,33 @@ export function PaintCanvas({
         return;
       }
 
+      const statusHit = findDraftStatusItemAt(stagePt.x, stagePt.y);
+      if (activeTool === "line" && statusHit) {
+        const now = Date.now();
+        const key = `${statusHit.layerId}:${statusHit.itemId}`;
+        const prev = lastStatusTapRef.current;
+        const isFastDouble = Boolean(prev && prev.key === key && now - prev.at <= 280);
+        lastStatusTapRef.current = { key, at: now };
+        if (isFastDouble) {
+          selectItem(statusHit);
+          onOpenStatusPanel?.();
+        }
+        dragStartRef.current = docPt;
+        setDraft({
+          type: "line",
+          x1: docPt.x,
+          y1: docPt.y,
+          x2: docPt.x,
+          y2: docPt.y,
+          c1x: docPt.x,
+          c1y: docPt.y,
+          c2x: docPt.x,
+          c2y: docPt.y,
+        });
+        touchPanStartRef.current = null;
+        return;
+      }
+
       const hitItem = findDraftItemAt(stagePt.x, stagePt.y);
       if (hitItem) {
         selectItem(hitItem);
@@ -904,6 +1004,12 @@ export function PaintCanvas({
           return;
         }
         if (activeTool === "detector" && hitValue?.type === "detector") {
+          dragStartRef.current = null;
+          setDraft(null);
+          touchPanStartRef.current = null;
+          return;
+        }
+        if (activeTool === "point" && hitValue?.type === "point") {
           dragStartRef.current = null;
           setDraft(null);
           touchPanStartRef.current = null;
@@ -1074,6 +1180,21 @@ export function PaintCanvas({
         };
         addToActive(nextDetector);
         selectItem({ layerId: activeLayer.id, itemId: nextDetector.id });
+      } else if (activeTool === "point") {
+        const nextPoint: OverlayItem = {
+          id: crypto.randomUUID(),
+          type: "point",
+          x: docPt.x,
+          y: docPt.y,
+          label: "!",
+          checklist: {
+            comment: "",
+            photoDataUrl: null,
+            updatedAt: null,
+          },
+        };
+        addToActive(nextPoint);
+        selectItem({ layerId: activeLayer.id, itemId: nextPoint.id });
       } else if (activeTool === "text") {
         const nextText: OverlayItem = { id: crypto.randomUUID(), type: "text", x: docPt.x, y: docPt.y, text: "Tekst" };
         addToActive(nextText);

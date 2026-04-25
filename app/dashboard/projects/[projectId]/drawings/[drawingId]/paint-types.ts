@@ -1,4 +1,4 @@
-export type ToolId = "select" | "detector" | "line" | "rect" | "text" | "erase";
+export type ToolId = "select" | "detector" | "point" | "line" | "rect" | "text" | "erase";
 
 export type DetectorChecklist = {
   baseMounted: boolean;
@@ -11,8 +11,16 @@ export type DetectorChecklist = {
   updatedAt: string | null;
 };
 
+export type PointChecklist = {
+  comment: string;
+  photoDataUrl: string | null;
+  photoPath?: string | null;
+  updatedAt: string | null;
+};
+
 export type OverlayItem =
   | { id: string; type: "detector"; x: number; y: number; label?: string; checklist?: DetectorChecklist }
+  | { id: string; type: "point"; x: number; y: number; label?: string; checklist?: PointChecklist }
   | {
       id: string;
       type: "line";

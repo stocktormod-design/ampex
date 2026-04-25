@@ -122,7 +122,7 @@ export default async function DashboardHomePage() {
         >
           <BookOpen className="size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <span className="font-medium text-amber-800 dark:text-amber-300">
-            Du har {unreadProtocols} uleste protokoll{unreadProtocols === 1 ? "" : "er"}
+            Du har {unreadProtocols} uleste prosedyre{unreadProtocols === 1 ? "" : "r"}
           </span>
           <ArrowRight className="ml-auto size-4 shrink-0 text-amber-500" aria-hidden />
         </Link>

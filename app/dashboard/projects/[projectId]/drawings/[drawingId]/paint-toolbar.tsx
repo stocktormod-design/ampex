@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   MousePointer2,
   Flame,
+  AlertTriangle,
   Slash,
   RectangleHorizontal,
   Type,
@@ -21,6 +22,7 @@ type ToolDef = { id: ToolId; label: string; hint: string };
 const TOOLS: ToolDef[] = [
   { id: "select",   label: "Velg",     hint: "Velg / panorer" },
   { id: "detector", label: "Detektor", hint: "Plasser branndetektor" },
+  { id: "point",    label: "Punkt",    hint: "Plasser avvikspunkt" },
   { id: "line",     label: "Linje",    hint: "Tegn bezier-kurve" },
   { id: "rect",     label: "Rekt.",    hint: "Tegn rektangel" },
   { id: "text",     label: "Tekst",    hint: "Legg til tekst" },
@@ -30,6 +32,7 @@ const TOOLS: ToolDef[] = [
 const ICONS: Record<ToolId, typeof MousePointer2> = {
   select:   MousePointer2,
   detector: Flame,
+  point:    AlertTriangle,
   line:     Slash,
   rect:     RectangleHorizontal,
   text:     Type,
