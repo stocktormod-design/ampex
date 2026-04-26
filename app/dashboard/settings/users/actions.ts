@@ -29,7 +29,7 @@ export async function createUser(formData: FormData) {
   const requestedRoleRaw = String(formData.get("role") ?? "montor");
 
   if (!isAssignableRole(requestedRoleRaw)) {
-    redirect("/dashboard/settings/users?error=Ugyldig+rolle");
+    redirect("/dashboard/settings/users?new=1&error=Ugyldig+rolle");
   }
   const requestedRole = requestedRoleRaw as AppRole;
 
@@ -53,11 +53,11 @@ export async function createUser(formData: FormData) {
     !currentProfile?.company_id ||
     (!isAdminRole(currentProfile.role) && currentProfile.role !== "installator")
   ) {
-    redirect("/dashboard/settings/users?error=Du+har+ikke+tilgang");
+    redirect("/dashboard/settings/users?new=1&error=Du+har+ikke+tilgang");
   }
 
   if (!canCreateRole(currentProfile.role, requestedRole)) {
-    redirect("/dashboard/settings/users?error=Du+kan+bare+opprette+tillatte+roller");
+    redirect("/dashboard/settings/users?new=1&error=Du+kan+bare+opprette+tillatte+roller");
   }
 
   const adminClient = createAdminClient();
@@ -73,7 +73,7 @@ export async function createUser(formData: FormData) {
 
   if (createError || !createdUser.user) {
     redirect(
-      `/dashboard/settings/users?error=${encodeURIComponent(
+      `/dashboard/settings/users?new=1&error=${encodeURIComponent(
         createError?.message ?? "Klarte ikke opprette bruker",
       )}`,
     );
@@ -81,21 +81,24 @@ export async function createUser(formData: FormData) {
 
   const { error: updateProfileError } = await adminClient
     .from("profiles")
-    .update({
-      company_id: currentProfile.company_id,
-      role: requestedRole,
-      full_name: fullName,
-      phone: phone || null,
-    })
-    .eq("id", createdUser.user.id);
+    .upsert(
+      {
+        id: createdUser.user.id,
+        company_id: currentProfile.company_id,
+        role: requestedRole,
+        full_name: fullName,
+        phone: phone || null,
+      },
+      { onConflict: "id" },
+    );
 
   if (updateProfileError) {
     redirect(
-      `/dashboard/settings/users?error=${encodeURIComponent(updateProfileError.message)}`,
+      `/dashboard/settings/users?new=1&error=${encodeURIComponent(updateProfileError.message)}`,
     );
   }
 
-  redirect("/dashboard/settings/users?success=1");
+  redirect("/dashboard/settings/users?success=bruker-opprettet");
 }
 
 export async function setBlueprintAccessForWorkers(formData: FormData) {

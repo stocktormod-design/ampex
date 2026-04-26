@@ -150,9 +150,9 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 <AlertDescription>{searchParams.error}</AlertDescription>
               </Alert>
             )}
-            {searchParams?.success === "1" && (
+            {searchParams?.success === "bruker-opprettet" && (
               <Alert>
-                <AlertDescription>Bruker ble opprettet.</AlertDescription>
+                <AlertDescription>Bruker ble opprettet og kan nå logge inn.</AlertDescription>
               </Alert>
             )}
 
@@ -170,6 +170,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       )}
 
       {/* ── Feedback (outside form) ── */}
+      {searchParams?.success === "bruker-opprettet" && !showForm && (
+        <Alert>
+          <AlertDescription>Bruker ble opprettet og kan nå logge inn.</AlertDescription>
+        </Alert>
+      )}
       {searchParams?.success === "deleted" && !showForm && (
         <Alert>
           <AlertDescription>Brukeren ble slettet.</AlertDescription>
@@ -183,6 +188,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       {searchParams?.success === "blueprint-access-updated" && !showForm && (
         <Alert>
           <AlertDescription>Tegningstilgang ble oppdatert for valgte montører.</AlertDescription>
+        </Alert>
+      )}
+      {searchParams?.error && !showForm && (
+        <Alert variant="destructive">
+          <AlertDescription>{searchParams.error}</AlertDescription>
         </Alert>
       )}
 

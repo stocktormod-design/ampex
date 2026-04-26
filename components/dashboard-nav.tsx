@@ -23,6 +23,7 @@ type BaseNavProps = {
   canManageUsers: boolean;
   canManageLager: boolean;
   canViewInstallerInbox: boolean;
+  canManageRiskModules: boolean;
 };
 
 type MobileNavProps = BaseNavProps & {
@@ -39,6 +40,7 @@ function buildDesktopLinks(props: BaseNavProps): NavItem[] {
   links.push({ href: "/dashboard/protokoller", label: "Prosedyrer" });
   if (props.canManageLager) links.push({ href: "/dashboard/lager", label: "Lager" });
   if (props.canManageUsers) links.push({ href: "/dashboard/settings/users", label: "Brukere" });
+  if (props.canManageRiskModules) links.push({ href: "/dashboard/settings/risk-modules", label: "Sjekklister" });
   return links;
 }
 
@@ -202,6 +204,21 @@ export function MobileBottomNav(props: MobileNavProps) {
                 >
                   <Users className="size-5 shrink-0" />
                   <span className="flex-1">Brukere</span>
+                  <ChevronRight className="size-4 text-muted-foreground/40" />
+                </Link>
+              </li>
+            )}
+
+            {props.canManageRiskModules && (
+              <li className="border-t border-border/60">
+                <Link
+                  href="/dashboard/settings/risk-modules"
+                  className={`flex items-center gap-3 px-4 py-3.5 text-sm font-medium transition-colors hover:bg-muted/60 ${
+                    pathname.startsWith("/dashboard/settings/risk-modules") ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <ClipboardList className="size-5 shrink-0" />
+                  <span className="flex-1">Sjekklister</span>
                   <ChevronRight className="size-4 text-muted-foreground/40" />
                 </Link>
               </li>

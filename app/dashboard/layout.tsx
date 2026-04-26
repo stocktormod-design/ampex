@@ -40,6 +40,7 @@ export default async function DashboardLayout({
   const canManageUsers  = profile?.role === "owner" || profile?.role === "admin";
   const canManageLager  = profile?.role === "owner" || profile?.role === "admin";
   const canViewInstallerInbox = profile?.role ? roleCanViewInstallerInbox(profile.role) : false;
+  const canManageRiskModules = ["owner", "admin", "installator"].includes(profile?.role ?? "");
 
   async function signOut() {
     "use server";
@@ -72,6 +73,7 @@ export default async function DashboardLayout({
             canManageUsers={canManageUsers}
             canManageLager={canManageLager}
             canViewInstallerInbox={canViewInstallerInbox}
+            canManageRiskModules={canManageRiskModules}
           />
         </div>
 
@@ -111,6 +113,7 @@ export default async function DashboardLayout({
         canManageLager={canManageLager}
         canManageUsers={canManageUsers}
         canViewInstallerInbox={canViewInstallerInbox}
+        canManageRiskModules={canManageRiskModules}
         signOut={signOut}
       />
     </div>

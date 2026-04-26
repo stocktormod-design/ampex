@@ -208,7 +208,7 @@ export async function updateOrderStatus(formData: FormData) {
 }
 
 export async function saveRiskAssessment(formData: FormData) {
-  const { adminClient, companyId, userId } = await requireAdminContext();
+  const { adminClient, companyId, userId } = await requireContext();
   const orderId = String(formData.get("order_id") ?? "").trim();
   const payloadRaw = String(formData.get("payload_json") ?? "{}");
   const complete = String(formData.get("complete") ?? "0") === "1";

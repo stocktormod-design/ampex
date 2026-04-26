@@ -19,7 +19,7 @@ import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { OrderCsvExport } from "@/components/order-csv-export";
 import { HourTimer } from "@/app/dashboard/ordre/[orderId]/hour-timer";
-import { RiskAssessmentForm } from "@/app/dashboard/ordre/[orderId]/risk-assessment-form";
+import { RiskAssessmentForm, type RiskModule } from "@/app/dashboard/ordre/[orderId]/risk-assessment-form";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +176,23 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     decision_note: string | null;
   }[];
   const pendingInbox = inboxRows.find((r) => r.status === "pending") ?? null;
+
+  // Risk assessment modules
+  const { data: modulesRaw } = await supabase
+    .from("risk_assessment_modules")
+    .select("id, name, sort_order, risk_assessment_module_items(id, text, is_required, sort_order)")
+    .eq("company_id", profile.company_id)
+    .order("sort_order", { ascending: true });
+  const riskModules: RiskModule[] = ((modulesRaw ?? []) as {
+    id: string;
+    name: string;
+    sort_order: number;
+    risk_assessment_module_items: { id: string; text: string; is_required: boolean; sort_order: number }[];
+  }[]).map((m) => ({
+    id: m.id,
+    name: m.name,
+    items: [...(m.risk_assessment_module_items ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+  }));
 
   // Photos
   const { data: photosRaw } = await supabase
@@ -418,7 +435,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           <div className="mt-5">
             <RiskAssessmentForm
               orderId={order.id}
-              orderType={order.type}
+              modules={riskModules}
               existingPayload={risk?.payload ?? null}
               isCompleted={riskDone}
             />
