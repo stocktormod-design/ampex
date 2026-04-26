@@ -130,13 +130,23 @@ export async function createOrder(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const typeRaw = String(formData.get("type") ?? "").trim();
+  const riskTemplateId = String(formData.get("risk_template_id") ?? "").trim();
   const assignedInstallerIdRaw = String(formData.get("assigned_installer_id") ?? "").trim();
 
   if (!title) redirect("/dashboard/ordre?error=Mangler+tittel");
   if (!customerId) redirect("/dashboard/ordre?error=Velg+kunde");
   if (!ORDER_TYPES.has(typeRaw as OrderType)) redirect("/dashboard/ordre?error=Ugyldig+ordretype");
+  if (!riskTemplateId) redirect("/dashboard/ordre?new=1&error=Velg+risikomal");
 
   const type = typeRaw as OrderType;
+
+  const { data: templateData } = await adminClient
+    .from("risk_assessment_templates")
+    .select("id")
+    .eq("id", riskTemplateId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!templateData) redirect("/dashboard/ordre?new=1&error=Risikomal+ikke+funnet");
 
   const { data: customerData } = await adminClient
     .from("order_customers")
@@ -169,6 +179,7 @@ export async function createOrder(formData: FormData) {
       title,
       description: description || null,
       type,
+      risk_template_id: riskTemplateId,
       status: "active",
       created_by: userId,
       assigned_installer_id: assignedInstallerId,

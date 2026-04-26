@@ -108,6 +108,13 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     .order("full_name", { ascending: true });
   const installers = (installersData ?? []) as { id: string; full_name: string | null; role: string }[];
 
+  const { data: templatesData } = await supabase
+    .from("risk_assessment_templates")
+    .select("id, name")
+    .eq("company_id", profile.company_id)
+    .order("created_at", { ascending: true });
+  const templates = (templatesData ?? []) as { id: string; name: string }[];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -193,6 +200,31 @@ export default async function OrdersPage({ searchParams }: PageProps) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <NativeLabel htmlFor="order-risk-template">Risikomal</NativeLabel>
+              <select
+                id="order-risk-template"
+                name="risk_template_id"
+                required
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Velg risikomal</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Denne malen brukes i risikovurderingen for ordren.
+              </p>
+              {templates.length === 0 && (
+                <p className="text-xs text-destructive">
+                  Ingen risikomaler funnet. Opprett mal under Innstillinger → Sjekklister.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

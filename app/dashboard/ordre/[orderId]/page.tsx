@@ -96,7 +96,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
 
   const { data: orderData } = await supabase
     .from("orders")
-    .select("id, company_id, title, description, type, status, assigned_installer_id, order_customers(id, name, phone, email, address, maps_query)")
+    .select("id, company_id, title, description, type, status, assigned_installer_id, risk_template_id, risk_assessment_templates(name), order_customers(id, name, phone, email, address, maps_query)")
     .eq("id", orderId)
     .eq("company_id", profile.company_id)
     .maybeSingle();
@@ -108,6 +108,8 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     type: OrderType;
     status: string;
     assigned_installer_id: string | null;
+    risk_template_id: string | null;
+    risk_assessment_templates: { name: string }[] | { name: string } | null;
     order_customers: {
       id: string;
       name: string;
@@ -182,6 +184,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     .from("risk_assessment_modules")
     .select("id, name, sort_order, risk_assessment_module_items(id, text, is_required, sort_order)")
     .eq("company_id", profile.company_id)
+    .eq("template_id", order.risk_template_id)
     .order("sort_order", { ascending: true });
   const riskModules: RiskModule[] = ((modulesRaw ?? []) as {
     id: string;
@@ -241,6 +244,9 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
   const canTakeDecision = Boolean(pendingInbox && canInstallerDecide && (isAssignedInstaller || isAdminRole(profile.role)));
 
   const totalMinutes = hours.reduce((sum, h) => sum + h.minutes, 0);
+  const templateName = Array.isArray(order.risk_assessment_templates)
+    ? (order.risk_assessment_templates[0]?.name ?? null)
+    : (order.risk_assessment_templates?.name ?? null);
 
   return (
     <div className="space-y-6">
@@ -255,6 +261,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{order.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {orderStatusLabel(order.status)} · {order.type}
+          {templateName ? ` · Mal: ${templateName}` : ""}
         </p>
       </div>
 
