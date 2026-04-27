@@ -11,6 +11,9 @@ import {
   updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
+import { DrawingFireReportMenu } from "@/app/dashboard/projects/[projectId]/drawing-fire-report-menu";
+import { DrawingRevisionGroup } from "@/app/dashboard/projects/[projectId]/drawing-revision-group";
+import { DrawingSettingsDialog } from "@/app/dashboard/projects/[projectId]/drawing-settings-dialog";
 import { DrawingSearchFilterForm } from "@/app/dashboard/projects/[projectId]/drawing-search-filter-form";
 import { UploadVisibilityPicker } from "@/app/dashboard/projects/[projectId]/upload-visibility-picker";
 import { ProjectEditHeader } from "@/app/dashboard/projects/[projectId]/project-edit-header";
@@ -46,6 +49,7 @@ type DrawingRow = {
   is_archived: boolean;
   revision_group_id: string | null;
   disciplines: string[];
+  visible_to_user_ids: string[] | null;
 };
 
 type ProjectRow = {
@@ -100,21 +104,30 @@ function DisciplineChip({ id }: { id: string }) {
   );
 }
 
-function markCurrentRevisions(official: DrawingRow[]): Set<string> {
-  // Group by revision_group_id (if set) or by normalised name as fallback
-  const byGroup = new Map<string, DrawingRow>();
+/** Grupper offisielle tegninger som revisjoner av samme plan (nyeste først i hver gruppe). */
+function groupOfficialByRevision(official: DrawingRow[]): { head: DrawingRow; older: DrawingRow[] }[] {
+  const byKey = new Map<string, DrawingRow[]>();
   for (const d of official) {
     const key = d.revision_group_id ?? `__name__${d.name.toLowerCase().trim()}`;
-    const existing = byGroup.get(key);
-    if (!existing) {
-      byGroup.set(key, d);
-    } else {
-      const existingDate = existing.published_at ?? existing.created_at;
-      const dDate = d.published_at ?? d.created_at;
-      if (dDate > existingDate) byGroup.set(key, d);
-    }
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(d);
   }
-  return new Set(Array.from(byGroup.values()).map((d) => d.id));
+  const groups: { head: DrawingRow; older: DrawingRow[] }[] = [];
+  for (const [, list] of Array.from(byKey.entries())) {
+    const sorted = [...list].sort((a, b) => {
+      const ta = new Date(a.published_at ?? a.created_at).getTime();
+      const tb = new Date(b.published_at ?? b.created_at).getTime();
+      return tb - ta;
+    });
+    const head = sorted[0];
+    if (head) groups.push({ head, older: sorted.slice(1) });
+  }
+  groups.sort((a, b) => {
+    const ta = new Date(a.head.published_at ?? a.head.created_at).getTime();
+    const tb = new Date(b.head.published_at ?? b.head.created_at).getTime();
+    return tb - ta;
+  });
+  return groups;
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
@@ -144,7 +157,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const [drawingsRes, blueprintProfilesRes, blueprintAccessRes, blockedRpc] = await Promise.all([
     supabase
       .from("drawings")
-      .select("id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines")
+      .select(
+        "id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines, visible_to_user_ids",
+      )
       .eq("project_id", project.id)
       .order("created_at", { ascending: false }),
     isAdmin
@@ -185,7 +200,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const archivedOfficial = drawings.filter((d) => d.is_archived && d.pipeline === "official"  && matchesFilter(d));
   const archivedDraft    = drawings.filter((d) => d.is_archived && d.pipeline === "draft"     && matchesFilter(d));
 
-  const currentRevIds = markCurrentRevisions(official);
+  const revisionGroups = groupOfficialByRevision(official);
 
   const officialCount = drawings.filter((d) => d.pipeline === "official" && !d.is_archived).length;
   const draftCount    = drawings.filter((d) => d.pipeline === "draft"    && !d.is_archived).length;
@@ -206,6 +221,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     if (searchParams.success === "unarchived-official")    return "Tegning gjenopprettet som offisiell.";
     if (searchParams.success === "unarchived-draft")       return "Tegning gjenopprettet som utkast.";
     if (searchParams.success === "blueprint-access") return "Tegningstilgang er oppdatert.";
+    if (searchParams.success === "drawing-settings") return "Tegningsinnstillinger er lagret.";
     if (searchParams.success.startsWith("converted-")) {
       return `Konverterte ${searchParams.success.replace("converted-", "")} filer til PDF.`;
     }
@@ -474,59 +490,85 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Official revisions section ── */}
+      {/* ── Official revisions (gruppert: nyeste rad + eldre under pil) ── */}
       {(drawings.length > 0 || q || disc) && (
-        <DrawingSection
-          title="Gjeldende revisjoner"
-          drawings={official}
-          emptyMessage={q || disc ? "Ingen treff." : "Ingen offisielle revisjoner ennå."}
-          renderActions={(row) => (
-            <>
-              <Link
-                href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
-                title="Åpne i editor"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-              >
-                <Pencil className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">Editor</span>
-              </Link>
-              <Link
-                href={`/dashboard/projects/${project.id}/drawings/${row.id}/view`}
-                title="Vis tegning"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-              >
-                <Eye className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">Vis</span>
-              </Link>
-              {isAdmin && (
-                <form action={archiveDrawing}>
-                  <input type="hidden" name="drawing_id" value={row.id} />
-                  <button
-                    type="submit"
-                    title="Arkiver tegning"
-                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <Archive className="size-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Arkiver</span>
-                  </button>
-                </form>
-              )}
-            </>
-          )}
-          renderBadge={(row) => {
-            if (!currentRevIds.has(row.id)) return null;
-            // Only show badge when there are multiple revisions in the same group
-            const groupKey = row.revision_group_id ?? `__name__${row.name.toLowerCase().trim()}`;
-            const groupSize = official.filter((d) =>
-              (d.revision_group_id ?? `__name__${d.name.toLowerCase().trim()}`) === groupKey
-            ).length;
-            return groupSize > 1 ? (
-              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                Gjeldende
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Gjeldende revisjoner
+            </h2>
+            {revisionGroups.length > 0 && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                {revisionGroups.length}
               </span>
-            ) : null;
-          }}
-        />
+            )}
+          </div>
+          {revisionGroups.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              {q || disc ? "Ingen treff." : "Ingen offisielle revisjoner ennå."}
+            </p>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {revisionGroups.map(({ head, older }) => (
+                <DrawingRevisionGroup
+                  key={head.id}
+                  projectId={project.id}
+                  head={head}
+                  older={older}
+                  isAdmin={isAdmin}
+                  showCurrentBadge={older.length > 0}
+                  disciplineChips={(row) => (row.disciplines ?? []).map((d) => <DisciplineChip key={`${row.id}-${d}`} id={d} />)}
+                  headActions={
+                    <>
+                      <Link
+                        href={`/dashboard/projects/${project.id}/drawings/${head.id}`}
+                        title="Åpne i editor"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                      >
+                        <Pencil className="size-3.5" aria-hidden />
+                        <span className="hidden sm:inline">Editor</span>
+                      </Link>
+                      <Link
+                        href={`/dashboard/projects/${project.id}/drawings/${head.id}/view`}
+                        title="Vis tegning"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                      >
+                        <Eye className="size-3.5" aria-hidden />
+                        <span className="hidden sm:inline">Vis</span>
+                      </Link>
+                      {head.disciplines?.includes("fire") ? (
+                        <DrawingFireReportMenu projectId={project.id} drawingId={head.id} />
+                      ) : null}
+                      {isAdmin ? (
+                        <DrawingSettingsDialog
+                          projectId={project.id}
+                          drawingId={head.id}
+                          drawingName={head.name}
+                          members={companyProfiles.map((p) => ({ id: p.id, fullName: p.full_name }))}
+                          initialDisciplines={head.disciplines ?? []}
+                          initialVisibleToUserIds={head.visible_to_user_ids ?? null}
+                        />
+                      ) : null}
+                      {isAdmin ? (
+                        <form action={archiveDrawing}>
+                          <input type="hidden" name="drawing_id" value={head.id} />
+                          <button
+                            type="submit"
+                            title="Arkiver tegning"
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <Archive className="size-3.5" aria-hidden />
+                            <span className="hidden sm:inline">Arkiver</span>
+                          </button>
+                        </form>
+                      ) : null}
+                    </>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* ── Drafts section (admin only) ── */}
@@ -556,6 +598,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 <Pencil className="size-3.5" aria-hidden />
                 <span className="hidden sm:inline">Editor</span>
               </Link>
+              {isAdmin ? (
+                <DrawingSettingsDialog
+                  projectId={project.id}
+                  drawingId={row.id}
+                  drawingName={row.name}
+                  members={companyProfiles.map((p) => ({ id: p.id, fullName: p.full_name }))}
+                  initialDisciplines={row.disciplines ?? []}
+                  initialVisibleToUserIds={row.visible_to_user_ids ?? null}
+                />
+              ) : null}
+              {row.disciplines?.includes("fire") ? (
+                <DrawingFireReportMenu projectId={project.id} drawingId={row.id} />
+              ) : null}
               <form action={deleteDraftDrawing}>
                 <input type="hidden" name="drawing_id" value={row.id} />
                 <button

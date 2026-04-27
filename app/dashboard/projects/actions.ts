@@ -532,6 +532,111 @@ export async function updateOverlayVisibility(
   return { ok: true };
 }
 
+/**
+ * Oppdaterer payload (f.eks. detektor-sjekkliste) på et publisert overlay.
+ * RLS krever oppretter eller bedriftsadmin.
+ */
+export async function updatePublishedOverlayPayload(
+  overlayId: string,
+  nextPayload: unknown,
+): Promise<{ ok: true; payload: unknown } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Ikke innlogget" };
+
+  const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).maybeSingle();
+  const companyId = (profile as { company_id: string | null } | null)?.company_id;
+  if (!companyId) return { ok: false, error: "Ingen bedrift" };
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("drawing_overlays")
+    .select("id, drawing_id, tool_type, payload")
+    .eq("id", overlayId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, error: fetchErr?.message ?? "Element ikke funnet" };
+  }
+
+  const toolType = String((row as { tool_type: string }).tool_type);
+  const drawingId = String((row as { drawing_id: string }).drawing_id);
+
+  const { data: drawingRow } = await supabase
+    .from("drawings")
+    .select("project_id")
+    .eq("id", drawingId)
+    .maybeSingle();
+  const projectId = String((drawingRow as { project_id: string } | null)?.project_id ?? "");
+
+  const adminClient = createAdminClient();
+  const normalized = await normalizeOverlayPayload(adminClient, companyId, drawingId, toolType, nextPayload);
+  if (!normalized.ok) {
+    return { ok: false, error: normalized.error };
+  }
+
+  const { error: upErr } = await supabase
+    .from("drawing_overlays")
+    .update({ payload: normalized.payload })
+    .eq("id", overlayId);
+
+  if (upErr) return { ok: false, error: upErr.message };
+
+  revalidatePath("/dashboard/projects");
+  revalidatePath(`/dashboard/projects/${projectId}/drawings/${drawingId}`);
+  return { ok: true as const, payload: normalized.payload };
+}
+
+/** Admin: oppdater tegningens synlighet (per bruker) og fagområde-tags. */
+export async function updateDrawingSettings(formData: FormData) {
+  const drawingId = String(formData.get("drawing_id") ?? "").trim();
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  if (!drawingId || !projectId) {
+    redirectProjectError(projectId || "", "Mangler tegning eller prosjekt");
+  }
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const owned = await getOwnedDrawing(adminClient, drawingId, companyId);
+  if (!owned.ok) {
+    redirectProjectError(projectId, owned.error);
+  }
+  if (owned.row.project_id !== projectId) {
+    redirectProjectError(projectId, "Tegningen hører ikke til dette prosjektet");
+  }
+
+  const visibleRaw = String(formData.get("visible_to_user_ids") ?? "").trim();
+  let visibleToUserIds: string[] | null = null;
+  if (visibleRaw) {
+    try {
+      const parsed = JSON.parse(visibleRaw) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        visibleToUserIds = (parsed as unknown[]).filter((v): v is string => typeof v === "string");
+      }
+    } catch {
+      /* tom streng = alle */
+    }
+  }
+
+  const disciplineRaw = formData.getAll("discipline");
+  const disciplines = disciplineRaw.map((v) => String(v)).filter((d) => VALID_DISCIPLINES.has(d));
+
+  const { error } = await adminClient
+    .from("drawings")
+    .update({
+      visible_to_user_ids: visibleToUserIds,
+      disciplines,
+    })
+    .eq("id", drawingId);
+
+  if (error) {
+    redirectProjectError(projectId, error.message);
+  }
+
+  revalidatePath(projectPath(projectId));
+  redirect(`${projectPath(projectId)}?success=drawing-settings`);
+}
+
 async function getOwnedDrawing(adminClient: ReturnType<typeof createAdminClient>, drawingId: string, companyId: string) {
   const { data, error } = await adminClient
     .from("drawings")

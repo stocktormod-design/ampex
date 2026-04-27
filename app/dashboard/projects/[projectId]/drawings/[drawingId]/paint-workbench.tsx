@@ -4,7 +4,12 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { ListTodo, Trash2 } from "lucide-react";
-import { publishOverlayItem, deleteOverlayItem, updateOverlayVisibility } from "@/app/dashboard/projects/actions";
+import {
+  publishOverlayItem,
+  deleteOverlayItem,
+  updateOverlayVisibility,
+  updatePublishedOverlayPayload,
+} from "@/app/dashboard/projects/actions";
 import {
   createDrawingTask,
   deleteDrawingTask,
@@ -386,6 +391,8 @@ type PanelBodyProps = {
   onExportDetectorPdf: () => void;
   onExportDetectorXml: () => void;
   taskFeedback: string | null;
+  selectedDraftItemId: { layerId: string; itemId: string } | null;
+  onActivateDraftRow: (row: DraftPublishRow) => void;
 };
 
 function PanelBody({
@@ -432,12 +439,24 @@ function PanelBody({
   onExportDetectorPdf,
   onExportDetectorXml,
   taskFeedback,
+  selectedDraftItemId,
+  onActivateDraftRow,
 }: PanelBodyProps) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
   const [editingVisibility, setEditingVisibility] = useState<string[] | null>(null);
   const [savingVisibility, setSavingVisibility] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "drafts" || !selectedDraftItemId) return;
+    const row = draftRows.find(
+      (r) => r.layerId === selectedDraftItemId.layerId && r.item.id === selectedDraftItemId.itemId,
+    );
+    if (!row) return;
+    const el = document.getElementById(`draft-card-${row.localKey}`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeTab, selectedDraftItemId, draftRows]);
 
   async function saveOverlayVisibility() {
     if (!editingOverlayId) return;
@@ -930,13 +949,32 @@ function PanelBody({
               </div>
             ) : (
               <ul className="space-y-2">
-                {draftRows.map((row) => (
-                  <li key={row.localKey} className="rounded-xl border border-border bg-background p-3.5">
+                {draftRows.map((row) => {
+                  const isListSelected =
+                    Boolean(selectedDraftItemId) &&
+                    selectedDraftItemId?.layerId === row.layerId &&
+                    selectedDraftItemId?.itemId === row.item.id;
+                  return (
+                  <li
+                    key={row.localKey}
+                    id={`draft-card-${row.localKey}`}
+                    className={`rounded-xl border bg-background p-3.5 transition-shadow ${
+                      isListSelected
+                        ? "border-cyan-500/60 ring-2 ring-cyan-500/35 shadow-md"
+                        : "border-border"
+                    }`}
+                    onClick={(e) => {
+                      const t = e.target as HTMLElement;
+                      if (t.closest("button, input, textarea, a, label")) return;
+                      onActivateDraftRow(row);
+                    }}
+                  >
                     <div className="mb-3 flex items-center gap-2">
                       {groupSelectMode && (
                         <input
                           type="checkbox"
                           checked={Boolean(selectedDraftKeys[row.localKey])}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => onToggleDraftKey(row.localKey, e.target.checked)}
                           className="size-4 rounded border-input"
                         />
@@ -959,13 +997,17 @@ function PanelBody({
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => onPublishOne(row)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onPublishOne(row);
+                      }}
                       className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/10 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
                     >
                       Publiser
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
 
@@ -1131,6 +1173,7 @@ export function PaintWorkbench({
     const result = await deleteOverlayItem(id);
     if (result.ok) {
       setPublishedOverlays((prev) => prev.filter((o) => o.id !== id));
+      if (selectedPublishedOverlayId === id) setSelectedPublishedOverlayId(null);
     }
   }
 
@@ -1146,6 +1189,8 @@ export function PaintWorkbench({
   const [visibilityMap, setVisibilityMap] = useState<Record<string, string[] | null>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [selectedDraftItemId, setSelectedDraftItemId] = useState<{ layerId: string; itemId: string } | null>(null);
+  const [selectedPublishedOverlayId, setSelectedPublishedOverlayId] = useState<string | null>(null);
+  const [focusDraftTarget, setFocusDraftTarget] = useState<{ layerId: string; itemId: string; nonce: number } | null>(null);
   const [activeTab, setActiveTab] = useState<PanelTab>("status");
   const [drawingTasks, setDrawingTasks] = useState<DrawingTaskRow[]>(initialTasks);
   const [reportBusy, setReportBusy] = useState(false);
@@ -1249,13 +1294,25 @@ export function PaintWorkbench({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  /* Single-tap a detector → auto-open the status panel */
+  /* Single-tap a detector → auto-open status-fanen (unntatt når utkast-fanen er aktiv). */
   useEffect(() => {
+    if (activeTab === "drafts") return;
     if (!selectedDraftDetector) return;
     if (!PANEL_AUTO_OPEN_TOOLS.has(activeToolRef.current)) return;
     setActiveTab("status");
     setPanelOpen(true);
-  }, [selectedDraftDetector]);
+  }, [selectedDraftDetector, activeTab]);
+
+  function activateDraftRow(row: DraftPublishRow) {
+    setSelectedPublishedOverlayId(null);
+    setSelectedDraftItemId({ layerId: row.layerId, itemId: row.item.id });
+    if (row.item.type === "detector" || row.item.type === "point") {
+      setSelectedDraftDetector({ layerId: row.layerId, itemId: row.item.id });
+    } else {
+      setSelectedDraftDetector(null);
+    }
+    setFocusDraftTarget({ layerId: row.layerId, itemId: row.item.id, nonce: Date.now() });
+  }
 
   function addLayer() {
     setLayersWithHistory((prev) => {
@@ -1274,6 +1331,7 @@ export function PaintWorkbench({
   function clearActiveLayer() {
     setLayersWithHistory((prev) => prev.map((l) => (l.id === activeLayerId ? { ...l, items: [] } : l)));
     setSelectedDraftDetector(null);
+    setSelectedPublishedOverlayId(null);
   }
 
   const publishedLayers = useMemo<OverlayLayer[]>(() => {
@@ -1323,13 +1381,27 @@ export function PaintWorkbench({
   }, [selectedDraftItemId, draftRows]);
 
   const selectedDraftDetectorItem = useMemo(() => {
+    if (selectedPublishedOverlayId) {
+      const ov = publishedOverlays.find((o) => o.id === selectedPublishedOverlayId);
+      if (!ov || (ov.toolType !== "detector" && ov.toolType !== "point")) return null;
+      const item = ov.payload;
+      if (item.type !== "detector" && item.type !== "point") return null;
+      const fakeLayer: OverlayLayer = {
+        id: `published:${ov.id}`,
+        name: `${ov.layerName} (publisert)`,
+        visible: true,
+        color: ov.layerColor,
+        items: [],
+      };
+      return { layer: fakeLayer, item };
+    }
     if (!selectedDraftDetector) return null;
     const layer = layers.find((l) => l.id === selectedDraftDetector.layerId);
     if (!layer) return null;
     const item = layer.items.find((i) => i.id === selectedDraftDetector.itemId);
     if (!item || (item.type !== "detector" && item.type !== "point")) return null;
     return { layer, item };
-  }, [layers, selectedDraftDetector]);
+  }, [layers, selectedDraftDetector, selectedPublishedOverlayId, publishedOverlays]);
 
   const activeLayer = useMemo(
     () => layers.find((layer) => layer.id === activeLayerId) ?? null,
@@ -1347,25 +1419,62 @@ export function PaintWorkbench({
   }
 
   function updateSelectedDetectorChecklist(next: Partial<DetectorChecklist> | Partial<PointChecklist>) {
+    if (selectedPublishedOverlayId) {
+      const ov = publishedOverlays.find((o) => o.id === selectedPublishedOverlayId);
+      if (!ov) return;
+      const item = ov.payload;
+      if (item.type === "detector") {
+        const current = toChecklist(item.checklist);
+        const nextPayload = {
+          ...item,
+          checklist: { ...current, ...(next as Partial<DetectorChecklist>), updatedAt: new Date().toISOString() },
+        };
+        void (async () => {
+          const r = await updatePublishedOverlayPayload(selectedPublishedOverlayId, nextPayload);
+          if (r.ok && "payload" in r) {
+            setPublishedOverlays((prev) =>
+              prev.map((o) => (o.id === selectedPublishedOverlayId ? { ...o, payload: r.payload as OverlayItem } : o)),
+            );
+          }
+        })();
+        return;
+      }
+      if (item.type === "point") {
+        const current = toPointChecklist(item.checklist);
+        const nextPayload = {
+          ...item,
+          checklist: { ...current, ...(next as Partial<PointChecklist>), updatedAt: new Date().toISOString() },
+        };
+        void (async () => {
+          const r = await updatePublishedOverlayPayload(selectedPublishedOverlayId, nextPayload);
+          if (r.ok && "payload" in r) {
+            setPublishedOverlays((prev) =>
+              prev.map((o) => (o.id === selectedPublishedOverlayId ? { ...o, payload: r.payload as OverlayItem } : o)),
+            );
+          }
+        })();
+      }
+      return;
+    }
     if (!selectedDraftDetector) return;
     const updated = layersRef.current.map((layer) => {
-        if (layer.id !== selectedDraftDetector.layerId) return layer;
-        return {
-          ...layer,
-          items: layer.items.map((item) => {
-            if (item.id !== selectedDraftDetector.itemId) return item;
-            if (item.type === "detector") {
-              const current = toChecklist(item.checklist);
-              return { ...item, checklist: { ...current, ...(next as Partial<DetectorChecklist>), updatedAt: new Date().toISOString() } };
-            }
-            if (item.type === "point") {
-              const current = toPointChecklist(item.checklist);
-              return { ...item, checklist: { ...current, ...(next as Partial<PointChecklist>), updatedAt: new Date().toISOString() } };
-            }
-            return item;
-          }),
-        };
-      });
+      if (layer.id !== selectedDraftDetector.layerId) return layer;
+      return {
+        ...layer,
+        items: layer.items.map((item) => {
+          if (item.id !== selectedDraftDetector.itemId) return item;
+          if (item.type === "detector") {
+            const current = toChecklist(item.checklist);
+            return { ...item, checklist: { ...current, ...(next as Partial<DetectorChecklist>), updatedAt: new Date().toISOString() } };
+          }
+          if (item.type === "point") {
+            const current = toPointChecklist(item.checklist);
+            return { ...item, checklist: { ...current, ...(next as Partial<PointChecklist>), updatedAt: new Date().toISOString() } };
+          }
+          return item;
+        }),
+      };
+    });
     setLayers(updated);
   }
 
@@ -1703,6 +1812,8 @@ export function PaintWorkbench({
     onExportDetectorPdf: handleExportDetectorPdf,
     onExportDetectorXml: handleExportDetectorXml,
     taskFeedback,
+    selectedDraftItemId,
+    onActivateDraftRow: activateDraftRow,
   };
 
   return (
@@ -1719,11 +1830,25 @@ export function PaintWorkbench({
             drawingName={drawingName}
             activeTool={activeTool}
             publishedLayers={publishedLayers}
+            publishedOverlays={publishedOverlays}
             draftLayers={layers}
             activeLayerId={activeLayerId}
             onUpdateLayers={setLayersWithHistory}
             selectedDraftDetector={selectedDraftDetector}
-            onSelectDraftDetector={setSelectedDraftDetector}
+            onSelectDraftDetector={(sel) => {
+              setSelectedDraftDetector(sel);
+              if (sel) setSelectedPublishedOverlayId(null);
+            }}
+            selectedPublishedOverlayId={selectedPublishedOverlayId}
+            onSelectPublishedOverlay={(id) => {
+              setSelectedPublishedOverlayId(id);
+              if (id) {
+                setSelectedDraftDetector(null);
+                setSelectedDraftItemId(null);
+              }
+            }}
+            suppressStatusPanelOnSelection={activeTab === "drafts" && panelOpen}
+            focusDraftRequest={focusDraftTarget}
             panelOpen={panelOpen}
             onTogglePanel={() => setPanelOpen((v) => !v)}
             onOpenStatusPanel={() => {
@@ -1731,7 +1856,10 @@ export function PaintWorkbench({
               setPanelOpen(true);
             }}
             onPinchZoom={() => setActiveTool("select")}
-            onSelectDraftItem={(sel) => setSelectedDraftItemId(sel)}
+            onSelectDraftItem={(sel) => {
+              setSelectedDraftItemId(sel);
+              if (sel) setSelectedPublishedOverlayId(null);
+            }}
             inlinePublish={inlinePublishRow ? {
               onPublish: publishInlineItem,
               pending,

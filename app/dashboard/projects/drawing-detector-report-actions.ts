@@ -148,6 +148,38 @@ export async function exportDetectorReportPdf(
   y -= 6;
   drawLines(11, true, "Sammendrag");
   drawLines(10, false, narrative);
+  y -= 6;
+
+  /* Visuell skala: «kappe av» = ferdig (0/10 hvis ingen har tatt av kappen ennå) */
+  const total = detectors.length;
+  const done = capOff;
+  drawLines(10, true, "Ferdigstillelse (kappe av registrert som «nei» / av)");
+  const barW = 420;
+  const barH = 16;
+  const trackY = y - barH;
+  page.drawRectangle({
+    x: margin,
+    y: trackY,
+    width: barW,
+    height: barH,
+    borderColor: rgb(0.72, 0.74, 0.78),
+    borderWidth: 1,
+    color: rgb(0.93, 0.94, 0.96),
+  });
+  if (total > 0 && done > 0) {
+    const innerW = barW - 4;
+    const fillW = (done / total) * innerW;
+    page.drawRectangle({
+      x: margin + 2,
+      y: trackY + 2,
+      width: fillW,
+      height: barH - 4,
+      color: rgb(0.12, 0.62, 0.38),
+    });
+  }
+  y = trackY - 8;
+  drawLines(10, false, `${done} av ${total} detektor(er) markert med kappe av (ferdig). ${capOn} med kappe på. ${unset} uten valg.`);
+
   y -= 4;
   drawLines(11, true, "Detektorer");
   if (detectors.length === 0) {

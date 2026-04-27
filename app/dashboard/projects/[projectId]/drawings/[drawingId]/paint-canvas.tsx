@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent, type WheelEvent } from "react";
-import type { OverlayItem, OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type {
+  OverlayItem,
+  OverlayLayer,
+  PublishedOverlay,
+  ToolId,
+} from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
   fileUrl: string;
@@ -9,11 +14,18 @@ type Props = {
   drawingName: string;
   activeTool: ToolId;
   publishedLayers: OverlayLayer[];
+  publishedOverlays?: PublishedOverlay[];
   draftLayers: OverlayLayer[];
   activeLayerId: string;
   onUpdateLayers: (updater: (prev: OverlayLayer[]) => OverlayLayer[]) => void;
   selectedDraftDetector: { layerId: string; itemId: string } | null;
   onSelectDraftDetector: (selection: { layerId: string; itemId: string } | null) => void;
+  selectedPublishedOverlayId?: string | null;
+  onSelectPublishedOverlay?: (overlayId: string | null) => void;
+  /** Når sann: ikke åpne status-fanen ved valg av detektor/punkt (f.eks. utkast-fanen er aktiv). */
+  suppressStatusPanelOnSelection?: boolean;
+  /** Sentrer kartet på utkast-element (øker `nonce` for hvert fokusønske). */
+  focusDraftRequest?: { layerId: string; itemId: string; nonce: number } | null;
   panelOpen?: boolean;
   onTogglePanel?: () => void;
   onOpenStatusPanel?: () => void;
@@ -256,11 +268,16 @@ export function PaintCanvas({
   drawingName,
   activeTool,
   publishedLayers,
+  publishedOverlays = [],
   draftLayers,
   activeLayerId,
   onUpdateLayers,
   selectedDraftDetector,
   onSelectDraftDetector,
+  selectedPublishedOverlayId = null,
+  onSelectPublishedOverlay,
+  suppressStatusPanelOnSelection = false,
+  focusDraftRequest = null,
   panelOpen,
   onTogglePanel,
   onOpenStatusPanel,
@@ -300,6 +317,8 @@ export function PaintCanvas({
   const middlePanRef = useRef(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
+  const [focusFlashDraft, setFocusFlashDraft] = useState<{ layerId: string; itemId: string; until: number } | null>(null);
+  const [focusRedrawTick, setFocusRedrawTick] = useState(0);
   const canvasCursor = isPanning
     ? "cursor-grabbing"
     : spaceHeld || activeTool === "select" || !!dragLineHandle
@@ -497,6 +516,23 @@ export function PaintCanvas({
     );
   }
 
+  function findPublishedOverlayAtStage(x: number, y: number): string | null {
+    if (!publishedOverlays.length) return null;
+    const hitRadius = 12;
+    for (let i = publishedOverlays.length - 1; i >= 0; i -= 1) {
+      const row = publishedOverlays[i]!;
+      if (row.toolType !== "detector" && row.toolType !== "point") continue;
+      const item = row.payload;
+      if (item.type !== "detector" && item.type !== "point") continue;
+      const displayX = item.x - docOffset.x;
+      const displayY = item.y - docOffset.y;
+      if (Math.hypot(displayX - x, displayY - y) <= hitRadius) {
+        return row.id;
+      }
+    }
+    return null;
+  }
+
   function findDraftStatusItemAt(x: number, y: number) {
     const hitRadius = 12;
     for (const layer of draftLayers) {
@@ -573,15 +609,17 @@ export function PaintCanvas({
     if (!selection) {
       setSelectedDraftLine(null);
       onSelectDraftDetector(null);
+      onSelectPublishedOverlay?.(null);
       return;
     }
+    onSelectPublishedOverlay?.(null);
     const layer = draftLayers.find((l) => l.id === selection.layerId);
     const item = layer?.items.find((i) => i.id === selection.itemId);
     if (!item) return;
     if (item.type === "detector" || item.type === "point") {
       onSelectDraftDetector(selection);
       setSelectedDraftLine(null);
-      if (activeTool !== "line") {
+      if (activeTool !== "line" && !suppressStatusPanelOnSelection) {
         onOpenStatusPanel?.();
       }
     } else if (item.type === "line") {
@@ -743,7 +781,60 @@ export function PaintCanvas({
       }
       ctx.restore();
     }
-  }, [allLayers, draft, activeLayer, selectedDraftDetector, selectedDraftItem, selectedDraftLine, dragLineHandle, stageW, stageH, docOffset.x, docOffset.y]);
+
+    const pubSel = publishedOverlays.find((o) => o.id === selectedPublishedOverlayId);
+    if (pubSel && (pubSel.toolType === "detector" || pubSel.toolType === "point")) {
+      const display = toDisplayItem(pubSel.payload);
+      if (display.type === "detector" || display.type === "point") {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(display.x, display.y, 15, 0, Math.PI * 2);
+        ctx.strokeStyle = "#22d3ee";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    const flash = focusFlashDraft;
+    if (flash && Date.now() < flash.until) {
+      for (const layer of draftLayers) {
+        if (layer.id !== flash.layerId) continue;
+        for (const item of layer.items) {
+          if (item.id !== flash.itemId) continue;
+          if (item.type === "detector" || item.type === "point") {
+            const d = toDisplayItem(item);
+            if (d.type === "detector" || d.type === "point") {
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(d.x, d.y, 20, 0, Math.PI * 2);
+              ctx.strokeStyle = "rgba(34, 211, 238, 0.9)";
+              ctx.lineWidth = 3;
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      }
+    }
+  }, [
+    allLayers,
+    draft,
+    activeLayer,
+    selectedDraftDetector,
+    selectedDraftItem,
+    selectedDraftLine,
+    dragLineHandle,
+    stageW,
+    stageH,
+    docOffset.x,
+    docOffset.y,
+    publishedOverlays,
+    selectedPublishedOverlayId,
+    focusFlashDraft,
+    focusRedrawTick,
+    draftLayers,
+  ]);
 
   useEffect(() => {
     if (!selectedDraftLine) return;
@@ -803,7 +894,7 @@ export function PaintCanvas({
       lastStatusTapRef.current = { key, at: now };
       if (isFastDouble) {
         selectItem(statusHit);
-        onOpenStatusPanel?.();
+        if (!suppressStatusPanelOnSelection) onOpenStatusPanel?.();
       }
       dragStartRef.current = docPt;
       setDraft({
@@ -829,16 +920,29 @@ export function PaintCanvas({
       if (activeTool === "detector" && hitValue?.type === "detector") return;
     }
 
+    const publishedHit = !hitItem ? findPublishedOverlayAtStage(pt.x, pt.y) : null;
+    if (publishedHit && onSelectPublishedOverlay) {
+      setSelectedDraftItem(null);
+      setSelectedDraftLine(null);
+      onSelectDraftDetector(null);
+      onSelectDraftItem?.(null);
+      onSelectPublishedOverlay(publishedHit);
+      if (activeTool === "select" || activeTool === "detector" || activeTool === "point") {
+        return;
+      }
+    }
+
     if (activeTool === "select") {
-      if (!hitItem) {
+      if (!hitItem && !publishedHit) {
         selectItem(null);
+        onSelectPublishedOverlay?.(null);
       }
       setIsPanning(true);
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       return;
     }
 
-    if (!hitItem) selectItem(null);
+    if (!hitItem && !publishedHit) selectItem(null);
 
     if (activeTool === "detector") {
       const nextDetector: OverlayItem = {
@@ -1048,7 +1152,7 @@ export function PaintCanvas({
         lastStatusTapRef.current = { key, at: now };
         if (isFastDouble) {
           selectItem(statusHit);
-          onOpenStatusPanel?.();
+          if (!suppressStatusPanelOnSelection) onOpenStatusPanel?.();
         }
         dragStartRef.current = docPt;
         setDraft({
@@ -1090,7 +1194,24 @@ export function PaintCanvas({
           return;
         }
       } else {
-        selectItem(null);
+        const pubHit = findPublishedOverlayAtStage(stagePt.x, stagePt.y);
+        if (pubHit && onSelectPublishedOverlay) {
+          setSelectedDraftItem(null);
+          setSelectedDraftLine(null);
+          onSelectDraftDetector(null);
+          onSelectDraftItem?.(null);
+          onSelectPublishedOverlay(pubHit);
+          dragStartRef.current = null;
+          setDraft(null);
+          touchPanStartRef.current =
+            activeTool === "select" || activeTool === "detector" || activeTool === "point" ? null : { x: t.clientX, y: t.clientY };
+          if (activeTool === "select" || activeTool === "detector" || activeTool === "point") {
+            return;
+          }
+        } else {
+          selectItem(null);
+          onSelectPublishedOverlay?.(null);
+        }
       }
 
       if (activeTool === "select") {
@@ -1351,6 +1472,39 @@ export function PaintCanvas({
     setZoomMode("fit");
     setPanOffset({ x: 0, y: 0 });
   }
+
+  useEffect(() => {
+    if (!focusDraftRequest?.nonce) return;
+    const { layerId, itemId } = focusDraftRequest;
+    const layer = draftLayers.find((l) => l.id === layerId);
+    const item = layer?.items.find((i) => i.id === itemId);
+    if (!item || (item.type !== "detector" && item.type !== "point")) return;
+    const sx = item.x - docOffset.x;
+    const sy = item.y - docOffset.y;
+    const targetZoom = clampZoomForViewport(Math.max(minAllowedZoom() * 1.45, 1.2));
+    setZoomMode("manual");
+    setManualZoom(targetZoom);
+    setPanOffset(
+      clampPan({ x: (stageW / 2 - sx) * targetZoom, y: (stageH / 2 - sy) * targetZoom }, targetZoom),
+    );
+    setFocusFlashDraft({ layerId, itemId, until: Date.now() + 3000 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- kun ved eksplisitt fokus (nonce), ikke ved pan/docOffset
+  }, [focusDraftRequest?.nonce, focusDraftRequest?.layerId, focusDraftRequest?.itemId, draftLayers, stageW, stageH]);
+
+  useEffect(() => {
+    if (!focusFlashDraft) return;
+    if (Date.now() >= focusFlashDraft.until) {
+      setFocusFlashDraft(null);
+      return;
+    }
+    const id = window.setInterval(() => {
+      setFocusRedrawTick((x) => x + 1);
+      if (Date.now() >= (focusFlashDraft.until ?? 0)) {
+        setFocusFlashDraft(null);
+      }
+    }, 120);
+    return () => clearInterval(id);
+  }, [focusFlashDraft]);
 
   function resetView() {
     setZoomMode("manual");
