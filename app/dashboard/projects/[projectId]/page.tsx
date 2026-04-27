@@ -49,7 +49,7 @@ type DrawingRow = {
   is_archived: boolean;
   revision_group_id: string | null;
   disciplines: string[];
-  visible_to_user_ids: string[] | null;
+  visible_to_user_ids?: string[] | null;
 };
 
 type ProjectRow = {
@@ -154,14 +154,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const project = projectData as ProjectRow | null;
   if (!project) redirect("/dashboard/projects");
 
-  const [drawingsRes, blueprintProfilesRes, blueprintAccessRes, blockedRpc] = await Promise.all([
-    supabase
-      .from("drawings")
-      .select(
-        "id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines, visible_to_user_ids",
-      )
-      .eq("project_id", project.id)
-      .order("created_at", { ascending: false }),
+  const drawingsSelectFull =
+    "id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines, visible_to_user_ids";
+  const drawingsSelectBase =
+    "id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines";
+
+  const [drawingsResInitial, blueprintProfilesRes, blueprintAccessRes, blockedRpc] = await Promise.all([
+    supabase.from("drawings").select(drawingsSelectFull).eq("project_id", project.id).order("created_at", { ascending: false }),
     isAdmin
       ? supabase
           .from("profiles")
@@ -176,6 +175,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       ? supabase.rpc("is_blueprint_access_blocked", { target_project_id: projectId })
       : Promise.resolve({ data: false }),
   ]);
+
+  const drawingsRes =
+    drawingsResInitial.error != null
+      ? await supabase
+          .from("drawings")
+          .select(drawingsSelectBase)
+          .eq("project_id", project.id)
+          .order("created_at", { ascending: false })
+      : drawingsResInitial;
 
   const drawings = (drawingsRes.data ?? []) as DrawingRow[];
   const companyProfiles = (blueprintProfilesRes.data ?? []) as { id: string; full_name: string | null; role: string }[];

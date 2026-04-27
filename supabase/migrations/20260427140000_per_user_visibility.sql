@@ -7,12 +7,12 @@
 alter table public.drawing_overlays
   add column if not exists visible_to_user_ids uuid[];
 
--- Drop the old text column (was checked as 'all'|'admins')
+-- Må fjerne policy som refererer til visibility_scope før kolonnen kan droppes.
+drop policy if exists "drawing_overlays_select_by_project_access" on public.drawing_overlays;
+
 alter table public.drawing_overlays
   drop column if exists visibility_scope;
 
--- Recreate the select policy with per-user logic
-drop policy if exists "drawing_overlays_select_by_project_access" on public.drawing_overlays;
 create policy "drawing_overlays_select_by_project_access"
 on public.drawing_overlays for select
 using (

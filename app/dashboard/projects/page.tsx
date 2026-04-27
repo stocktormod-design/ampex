@@ -54,16 +54,28 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
 
   const { data: projectsData } = await supabase
     .from("projects")
-    .select("id, name, description, status, created_at, drawings(count)")
+    .select("id, name, description, status, created_at")
     .eq("company_id", profile.company_id)
     .order("created_at", { ascending: false });
-  const projects = (projectsData ?? []).map((p) => {
-    const raw = p as typeof p & { drawings?: { count: number }[] };
-    return {
-      ...raw,
-      drawingCount: raw.drawings?.[0]?.count ?? 0,
-    };
-  }) as (ProjectRow & { drawingCount: number })[];
+
+  const projectRows = Array.isArray(projectsData) ? projectsData : [];
+  const projectIds = projectRows.map((p) => p.id).filter(Boolean);
+
+  const countByProject: Record<string, number> = {};
+  const chunkSize = 120;
+  for (let i = 0; i < projectIds.length; i += chunkSize) {
+    const chunk = projectIds.slice(i, i + chunkSize);
+    const { data: drawingRows } = await supabase.from("drawings").select("project_id").in("project_id", chunk);
+    for (const row of drawingRows ?? []) {
+      const pid = (row as { project_id: string }).project_id;
+      if (pid) countByProject[pid] = (countByProject[pid] ?? 0) + 1;
+    }
+  }
+
+  const projects = projectRows.map((p) => ({
+    ...(p as ProjectRow),
+    drawingCount: countByProject[p.id] ?? 0,
+  })) as (ProjectRow & { drawingCount: number })[];
 
   const q            = searchParams?.q?.trim().toLowerCase() ?? "";
   const statusFilter = searchParams?.status ?? "all";
