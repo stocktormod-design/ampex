@@ -1,0 +1,20 @@
+{
+  "name": "Ampex",
+  "short_name": "Ampex",
+  "description": "Prosjektstyring for elektro — prosjekter, tegninger og team.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "lang": "no",
+  "icons": [
+    {
+      "src": "/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1706,26 +1706,11 @@ export function PaintWorkbench({
   };
 
   return (
-    /* Root: horizontal flex — left sidebar | canvas column | right panel */
+    /* Root: canvas | inspector (valgfritt) | verktøyrail (fast høyre, desktop) */
     <div className="relative flex h-full overflow-hidden">
 
-      {/* ── LEFT SIDEBAR – desktop only ── */}
-      <nav className="hidden shrink-0 sm:flex sm:w-14 sm:flex-col sm:border-r sm:border-border sm:bg-background">
-        <PaintToolbar
-          sidebar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          layers={layers}
-          activeLayerId={activeLayerId}
-          onSetActiveLayer={setActiveLayerId}
-          onAddLayer={addLayer}
-          onToggleLayer={toggleLayer}
-          onClearActiveLayer={clearActiveLayer}
-        />
-      </nav>
-
       {/* ── CANVAS COLUMN: canvas + mobile toolbar (flex column, no overlap) ── */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col touch-manipulation [-webkit-tap-highlight-color:transparent]">
         {/* Canvas fills remaining height */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <PaintCanvas
@@ -1773,16 +1758,30 @@ export function PaintWorkbench({
         </div>
       </div>
 
-      {/* ── RIGHT PANEL – desktop: part of flex layout (no overlay, no shadow) ── */}
-      <aside
-        className={`hidden shrink-0 flex-col border-l border-border bg-background text-foreground transition-all duration-200 ease-out sm:flex ${
-          panelOpen ? "w-72 xl:w-80" : "w-0 overflow-hidden border-l-0"
-        }`}
-      >
-        {panelOpen && (
-          <PanelBody onClose={() => setPanelOpen(false)} {...panelBodyProps} />
-        )}
-      </aside>
+      {/* ── DESKTOP: inspiseringspanel + verktøyrail (rail alltid synlig til høyre) ── */}
+      <div className="hidden h-full shrink-0 flex-row border-l border-zinc-800/80 sm:flex">
+        <aside
+          className={`flex shrink-0 flex-col overflow-hidden bg-background text-foreground transition-[width] duration-150 ease-out ${
+            panelOpen ? "w-72 border-r border-zinc-800/70 xl:w-80" : "w-0 border-r-0"
+          }`}
+        >
+          {panelOpen ? <PanelBody onClose={() => setPanelOpen(false)} {...panelBodyProps} /> : null}
+        </aside>
+        <nav className="flex w-[4.875rem] shrink-0 flex-col bg-zinc-950/95 text-foreground backdrop-blur-sm xl:w-[5.25rem]">
+          <PaintToolbar
+            sidebar
+            railEdge="right"
+            activeTool={activeTool}
+            onSelectTool={setActiveTool}
+            layers={layers}
+            activeLayerId={activeLayerId}
+            onSetActiveLayer={setActiveLayerId}
+            onAddLayer={addLayer}
+            onToggleLayer={toggleLayer}
+            onClearActiveLayer={clearActiveLayer}
+          />
+        </nav>
+      </div>
 
       {/* ── MOBILE BACKDROP ── */}
       {panelOpen && (
@@ -1796,7 +1795,7 @@ export function PaintWorkbench({
 
       {/* ── MOBILE PANEL – slide-in overlay ── */}
       <aside
-        className={`absolute inset-y-0 right-0 z-50 flex flex-col border-l border-border bg-background text-foreground shadow-2xl transition-transform duration-180 ease-out sm:hidden ${
+        className={`absolute inset-y-0 right-0 z-50 flex touch-manipulation flex-col border-l border-border bg-background text-foreground shadow-2xl transition-transform duration-100 ease-out sm:hidden [-webkit-tap-highlight-color:transparent] ${
           panelOpen ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ width: "min(22rem, 100vw)" }}

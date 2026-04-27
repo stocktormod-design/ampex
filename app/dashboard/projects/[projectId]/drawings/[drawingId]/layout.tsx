@@ -17,7 +17,7 @@ export default async function DrawingFullscreenLayout({ children, params }: Layo
   const { projectId } = params instanceof Promise ? await params : params;
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-zinc-950">
+    <div className="fixed inset-0 z-[70] flex touch-manipulation flex-col overflow-hidden bg-zinc-950 [-webkit-tap-highlight-color:transparent]">
       <header className="relative flex h-11 shrink-0 items-center border-b border-zinc-800 bg-zinc-950 px-3">
         <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
         <Link
