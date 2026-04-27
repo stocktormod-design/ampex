@@ -13,6 +13,8 @@ import {
 } from "@/app/dashboard/projects/actions";
 import { DrawingFireReportMenu } from "@/app/dashboard/projects/[projectId]/drawing-fire-report-menu";
 import { DrawingRevisionGroup } from "@/app/dashboard/projects/[projectId]/drawing-revision-group";
+import { DISCIPLINE_OPTIONS } from "@/app/dashboard/projects/[projectId]/drawing-discipline-meta";
+import { DisciplineChips } from "@/app/dashboard/projects/[projectId]/discipline-chips";
 import { DrawingSettingsDialog } from "@/app/dashboard/projects/[projectId]/drawing-settings-dialog";
 import { DrawingSearchFilterForm } from "@/app/dashboard/projects/[projectId]/drawing-search-filter-form";
 import { UploadVisibilityPicker } from "@/app/dashboard/projects/[projectId]/upload-visibility-picker";
@@ -72,18 +74,6 @@ const STATUS_COLOR: Record<string, string> = {
   completed: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-const DISCIPLINE_OPTIONS = [
-  { id: "fire", label: "Brann" },
-  { id: "power", label: "Sterkstrøm" },
-  { id: "low_voltage", label: "Svakstrøm" },
-] as const;
-
-const DISCIPLINE_STYLE: Record<string, string> = {
-  fire: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
-  power: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-  low_voltage: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
-};
-
 function fmtDate(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("nb-NO", {
@@ -93,22 +83,11 @@ function fmtDate(value: string | null): string {
   });
 }
 
-function DisciplineChip({ id }: { id: string }) {
-  const opt = DISCIPLINE_OPTIONS.find((o) => o.id === id);
-  if (!opt) return null;
-  const style = DISCIPLINE_STYLE[id] ?? "";
-  return (
-    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style}`}>
-      {opt.label}
-    </span>
-  );
-}
-
 /** Grupper offisielle tegninger som revisjoner av samme plan (nyeste først i hver gruppe). */
 function groupOfficialByRevision(official: DrawingRow[]): { head: DrawingRow; older: DrawingRow[] }[] {
   const byKey = new Map<string, DrawingRow[]>();
   for (const d of official) {
-    const key = d.revision_group_id ?? `__name__${d.name.toLowerCase().trim()}`;
+    const key = d.revision_group_id ?? `__name__${(d.name ?? "").toLowerCase().trim()}`;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key)!.push(d);
   }
@@ -195,10 +174,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const showUpload = searchParams?.new === "1" && isAdmin;
 
   function matchesFilter(row: DrawingRow): boolean {
-    if (disc && (!row.disciplines || !row.disciplines.includes(disc))) return false;
+    const disciplines = Array.isArray(row.disciplines) ? row.disciplines : [];
+    if (disc && !disciplines.includes(disc)) return false;
     if (!q) return true;
     return (
-      row.name.toLowerCase().includes(q) ||
+      (row.name ?? "").toLowerCase().includes(q) ||
       (row.revision?.toLowerCase().includes(q) ?? false)
     );
   }
@@ -525,7 +505,6 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                   older={older}
                   isAdmin={isAdmin}
                   showCurrentBadge={older.length > 0}
-                  disciplineChips={(row) => (row.disciplines ?? []).map((d) => <DisciplineChip key={`${row.id}-${d}`} id={d} />)}
                   headActions={
                     <>
                       <Link
@@ -755,9 +734,7 @@ function DrawingListItem({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="truncate font-medium text-foreground">{row.name}</p>
             {badge}
-            {(row.disciplines ?? []).map((d) => (
-              <DisciplineChip key={d} id={d} />
-            ))}
+            <DisciplineChips ids={Array.isArray(row.disciplines) ? row.disciplines : []} />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {row.revision ? `Rev. ${row.revision} · ` : ""}

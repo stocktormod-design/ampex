@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Pencil, Eye, Archive } from "lucide-react";
 import { archiveDrawing } from "@/app/dashboard/projects/actions";
+import { DisciplineChips } from "@/app/dashboard/projects/[projectId]/discipline-chips";
 
 type DrawingRow = {
   id: string;
@@ -38,7 +39,6 @@ type Props = {
   isAdmin: boolean;
   showCurrentBadge: boolean;
   headActions: ReactNode;
-  disciplineChips: (row: DrawingRow) => ReactNode;
 };
 
 export function DrawingRevisionGroup({
@@ -48,7 +48,6 @@ export function DrawingRevisionGroup({
   isAdmin,
   showCurrentBadge,
   headActions,
-  disciplineChips,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const hasOlder = older.length > 0;
@@ -77,7 +76,7 @@ export function DrawingRevisionGroup({
                 Nyeste
               </span>
             ) : null}
-            {disciplineChips(head)}
+            <DisciplineChips ids={Array.isArray(head.disciplines) ? head.disciplines : []} />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {head.revision ? `Rev. ${head.revision} · ` : ""}
@@ -102,7 +101,7 @@ export function DrawingRevisionGroup({
                   {row.revision ? (
                     <span className="text-xs font-medium text-foreground">Rev. {row.revision}</span>
                   ) : null}
-                  {disciplineChips(row)}
+                  <DisciplineChips ids={Array.isArray(row.disciplines) ? row.disciplines : []} />
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {fmtDate(row.created_at)}
