@@ -963,7 +963,6 @@ export function PaintWorkbench({
   const [visibilityMap, setVisibilityMap] = useState<Record<string, string[] | null>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [selectedDraftItemId, setSelectedDraftItemId] = useState<{ layerId: string; itemId: string } | null>(null);
-  const [inlinePublishVisibleTo, setInlinePublishVisibleTo] = useState<string[] | null>(null);
   const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -1317,6 +1316,7 @@ export function PaintWorkbench({
   function publishInlineItem() {
     if (!inlinePublishRow) return;
     const row = inlinePublishRow;
+    const visibleToUserIds = visibilityMap[row.localKey] ?? null;
     setPublishError(null);
     startTransition(async () => {
       const result = await publishOverlayItem({
@@ -1324,7 +1324,7 @@ export function PaintWorkbench({
         toolType: row.item.type,
         layerName: row.layerName,
         layerColor: row.layerColor,
-        visibleToUserIds: inlinePublishVisibleTo,
+        visibleToUserIds,
         payload: row.item,
       });
       if (!result.ok) {
