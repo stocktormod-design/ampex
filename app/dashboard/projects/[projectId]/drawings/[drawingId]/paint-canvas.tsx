@@ -26,6 +26,13 @@ type Props = {
   suppressStatusPanelOnSelection?: boolean;
   /** Sentrer kartet på utkast-element (øker `nonce` for hvert fokusønske). */
   focusDraftRequest?: { layerId: string; itemId: string; nonce: number } | null;
+  /** Sentrer på publisert overlay (via id) eller dokumentpunkt (docX/docY i PDF-koordinater). */
+  focusPublishedRequest?: {
+    overlayId?: string | null;
+    docX?: number;
+    docY?: number;
+    nonce: number;
+  } | null;
   panelOpen?: boolean;
   onTogglePanel?: () => void;
   onOpenStatusPanel?: () => void;
@@ -262,6 +269,15 @@ function drawItem(
   ctx.restore();
 }
 
+function docPointFromPublishedOverlay(row: PublishedOverlay): { x: number; y: number } | null {
+  const p = row.payload;
+  if (p.type === "detector" || p.type === "point") return { x: p.x, y: p.y };
+  if (p.type === "line") return { x: (p.x1 + p.x2) / 2, y: (p.y1 + p.y2) / 2 };
+  if (p.type === "rect") return { x: p.x + p.w / 2, y: p.y + p.h / 2 };
+  if (p.type === "text") return { x: p.x, y: p.y };
+  return null;
+}
+
 export function PaintCanvas({
   fileUrl,
   filePath,
@@ -278,6 +294,7 @@ export function PaintCanvas({
   onSelectPublishedOverlay,
   suppressStatusPanelOnSelection = false,
   focusDraftRequest = null,
+  focusPublishedRequest = null,
   panelOpen,
   onTogglePanel,
   onOpenStatusPanel,
@@ -318,6 +335,12 @@ export function PaintCanvas({
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
   const [focusFlashDraft, setFocusFlashDraft] = useState<{ layerId: string; itemId: string; until: number } | null>(null);
+  const [focusFlashPublished, setFocusFlashPublished] = useState<{
+    overlayId?: string;
+    docX?: number;
+    docY?: number;
+    until: number;
+  } | null>(null);
   const [focusRedrawTick, setFocusRedrawTick] = useState(0);
   const canvasCursor = isPanning
     ? "cursor-grabbing"
@@ -817,6 +840,32 @@ export function PaintCanvas({
         }
       }
     }
+
+    const pubFlash = focusFlashPublished;
+    if (pubFlash && Date.now() < pubFlash.until) {
+      let sx: number | null = null;
+      let sy: number | null = null;
+      if (pubFlash.overlayId) {
+        const row = publishedOverlays.find((o) => o.id === pubFlash.overlayId);
+        const pt = row ? docPointFromPublishedOverlay(row) : null;
+        if (pt) {
+          sx = pt.x - docOffset.x;
+          sy = pt.y - docOffset.y;
+        }
+      } else if (typeof pubFlash.docX === "number" && typeof pubFlash.docY === "number") {
+        sx = pubFlash.docX - docOffset.x;
+        sy = pubFlash.docY - docOffset.y;
+      }
+      if (sx !== null && sy !== null) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(250, 204, 21, 0.95)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }, [
     allLayers,
     draft,
@@ -832,6 +881,7 @@ export function PaintCanvas({
     publishedOverlays,
     selectedPublishedOverlayId,
     focusFlashDraft,
+    focusFlashPublished,
     focusRedrawTick,
     draftLayers,
   ]);
@@ -1492,6 +1542,50 @@ export function PaintCanvas({
   }, [focusDraftRequest?.nonce, focusDraftRequest?.layerId, focusDraftRequest?.itemId, draftLayers, stageW, stageH]);
 
   useEffect(() => {
+    if (!focusPublishedRequest?.nonce) return;
+    const req = focusPublishedRequest;
+    let docPt: { x: number; y: number } | null = null;
+    const until = Date.now() + 3000;
+    const flash: { overlayId?: string; docX?: number; docY?: number; until: number } = { until };
+    if (req.overlayId) {
+      const row = publishedOverlays.find((o) => o.id === req.overlayId);
+      if (row) {
+        const pt = docPointFromPublishedOverlay(row);
+        if (pt) {
+          docPt = pt;
+          flash.overlayId = row.id;
+        }
+      }
+    }
+    if (!docPt && typeof req.docX === "number" && typeof req.docY === "number") {
+      docPt = { x: req.docX, y: req.docY };
+      flash.docX = req.docX;
+      flash.docY = req.docY;
+    }
+    if (!docPt) return;
+    const sx = docPt.x - docOffset.x;
+    const sy = docPt.y - docOffset.y;
+    const targetZoom = clampZoomForViewport(Math.max(minAllowedZoom() * 1.45, 1.2));
+    setZoomMode("manual");
+    setManualZoom(targetZoom);
+    setPanOffset(clampPan({ x: (stageW / 2 - sx) * targetZoom, y: (stageH / 2 - sy) * targetZoom }, targetZoom));
+    flash.until = Date.now() + 3000;
+    setFocusFlashPublished(flash);
+    if (flash.overlayId && onSelectPublishedOverlay) {
+      onSelectPublishedOverlay(flash.overlayId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- samme som fokus for utkast (nonce-drevet)
+  }, [
+    focusPublishedRequest?.nonce,
+    focusPublishedRequest?.overlayId,
+    focusPublishedRequest?.docX,
+    focusPublishedRequest?.docY,
+    publishedOverlays,
+    stageW,
+    stageH,
+  ]);
+
+  useEffect(() => {
     if (!focusFlashDraft) return;
     if (Date.now() >= focusFlashDraft.until) {
       setFocusFlashDraft(null);
@@ -1505,6 +1599,21 @@ export function PaintCanvas({
     }, 120);
     return () => clearInterval(id);
   }, [focusFlashDraft]);
+
+  useEffect(() => {
+    if (!focusFlashPublished) return;
+    if (Date.now() >= focusFlashPublished.until) {
+      setFocusFlashPublished(null);
+      return;
+    }
+    const id = window.setInterval(() => {
+      setFocusRedrawTick((x) => x + 1);
+      if (Date.now() >= (focusFlashPublished.until ?? 0)) {
+        setFocusFlashPublished(null);
+      }
+    }, 120);
+    return () => clearInterval(id);
+  }, [focusFlashPublished]);
 
   function resetView() {
     setZoomMode("manual");

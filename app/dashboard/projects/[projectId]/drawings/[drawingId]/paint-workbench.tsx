@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import { ListTodo, Trash2 } from "lucide-react";
+import { ListTodo, MapPin, ScrollText, Trash2 } from "lucide-react";
 import {
   publishOverlayItem,
   deleteOverlayItem,
@@ -22,12 +22,14 @@ import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[dra
 import type {
   CompanyMember,
   DetectorChecklist,
+  DrawingActivityEntry,
   PointChecklist,
   OverlayItem,
   OverlayLayer,
   PublishedOverlay,
   ToolId,
 } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   projectId: string;
@@ -39,8 +41,53 @@ type Props = {
   drawingName: string;
   initialPublished: PublishedOverlay[];
   initialTasks: DrawingTaskRow[];
+  initialActivity: DrawingActivityEntry[];
   companyMembers: CompanyMember[];
 };
+
+type DbPublishedOverlayRow = {
+  id: string;
+  drawing_id: string;
+  created_by: string;
+  tool_type: string;
+  layer_name: string;
+  layer_color: string;
+  payload: unknown;
+  visible_to_user_ids: string[] | null;
+};
+
+function mapDbOverlaysToPublished(rows: DbPublishedOverlayRow[]): PublishedOverlay[] {
+  return rows.map((row) => ({
+    id: row.id,
+    drawingId: row.drawing_id,
+    createdBy: row.created_by,
+    toolType: row.tool_type as PublishedOverlay["toolType"],
+    layerName: row.layer_name,
+    layerColor: row.layer_color,
+    payload: row.payload as PublishedOverlay["payload"],
+    visibleToUserIds: row.visible_to_user_ids,
+  }));
+}
+
+function fmtActivityTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("nb-NO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function activityEntryCanFocus(e: DrawingActivityEntry, published: PublishedOverlay[]): boolean {
+  if (e.overlayId && published.some((o) => o.id === e.overlayId)) return true;
+  const m = e.meta;
+  return typeof m?.docX === "number" && typeof m?.docY === "number";
+}
 
 const LAYER_COLORS = ["#ef4444", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2"];
 const TOOL_KEY_BINDINGS: Record<string, ToolId> = {
@@ -342,7 +389,7 @@ function VisibilityPicker({
 
 /* ── Panel body – shared between desktop sidebar and mobile overlay ── */
 
-export type PanelTab = "status" | "drafts" | "tasks";
+export type PanelTab = "status" | "drafts" | "tasks" | "log";
 
 type PanelBodyProps = {
   onClose: () => void;
@@ -393,6 +440,8 @@ type PanelBodyProps = {
   taskFeedback: string | null;
   selectedDraftItemId: { layerId: string; itemId: string } | null;
   onActivateDraftRow: (row: DraftPublishRow) => void;
+  activityLog: DrawingActivityEntry[];
+  onFocusActivityEntry: (e: DrawingActivityEntry) => void;
 };
 
 function PanelBody({
@@ -441,6 +490,8 @@ function PanelBody({
   taskFeedback,
   selectedDraftItemId,
   onActivateDraftRow,
+  activityLog,
+  onFocusActivityEntry,
 }: PanelBodyProps) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -485,7 +536,7 @@ function PanelBody({
       {/* Tab bar */}
       <div className="flex shrink-0 items-stretch justify-between border-b border-border">
         <div className="flex min-w-0">
-          {(["status", "tasks", "drafts"] as const).map((tab) => (
+          {(["status", "tasks", "drafts", "log"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -494,12 +545,21 @@ function PanelBody({
                 activeTab === tab ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab === "status" ? "Status" : tab === "tasks" ? (
+              {tab === "status" ? (
+                "Status"
+              ) : tab === "tasks" ? (
                 <>
                   <ListTodo className="size-3.5 shrink-0 sm:hidden" aria-hidden />
                   <span className="truncate">Oppgaver</span>
                 </>
-              ) : "Utkast"}
+              ) : tab === "drafts" ? (
+                "Utkast"
+              ) : (
+                <>
+                  <ScrollText className="size-3.5 shrink-0 sm:hidden" aria-hidden />
+                  <span className="truncate">Logg</span>
+                </>
+              )}
               {tab === "drafts" && draftRows.length > 0 && (
                 <span className="ml-0.5 shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                   {draftRows.length}
@@ -1090,6 +1150,49 @@ function PanelBody({
             )}
           </div>
         )}
+
+        {activeTab === "log" && (
+          <div className="space-y-3 px-4 py-4">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Hendelser lagres for teamet. Når noen andre publiserer, oppdateres eller sletter noe, får du en liten varsling — og publiserte elementer synkroniseres i sanntid via nettverket (ingen manuell
+              oppdatering nødvendig).
+            </p>
+            {activityLog.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                Ingen hendelser loggført ennå.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {activityLog.map((e) => {
+                  const canFocus = activityEntryCanFocus(e, publishedOverlays);
+                  return (
+                    <li key={e.id} className="rounded-lg border border-border bg-muted/15 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground">{e.summary}</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {(e.actorName ?? "Ukjent").trim()} · {fmtActivityTime(e.createdAt)}
+                          </p>
+                        </div>
+                        {canFocus ? (
+                          <button
+                            type="button"
+                            title="Sentrer kartet her"
+                            onClick={() => onFocusActivityEntry(e)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <MapPin className="size-3" aria-hidden />
+                            <span className="hidden sm:inline">Kart</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
@@ -1107,6 +1210,7 @@ export function PaintWorkbench({
   drawingName,
   initialPublished,
   initialTasks,
+  initialActivity,
   companyMembers,
 }: Props) {
   const [activeTool, setActiveTool] = useState<ToolId>("detector");
@@ -1197,6 +1301,125 @@ export function PaintWorkbench({
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const activeToolRef = useRef<ToolId>(activeTool);
+
+  const [activityLog, setActivityLog] = useState<DrawingActivityEntry[]>(initialActivity);
+  const [focusPublishedTarget, setFocusPublishedTarget] = useState<{
+    overlayId?: string | null;
+    docX?: number;
+    docY?: number;
+    nonce: number;
+  } | null>(null);
+  const [remoteToast, setRemoteToast] = useState<{ message: string; until: number } | null>(null);
+
+  const reloadPublishedOverlays = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("drawing_overlays")
+      .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
+      .eq("drawing_id", drawingId)
+      .eq("is_published", true)
+      .order("created_at", { ascending: true });
+    if (error) return;
+    setPublishedOverlays(mapDbOverlaysToPublished((data ?? []) as DbPublishedOverlayRow[]));
+  }, [drawingId]);
+
+  const focusActivityEntry = useCallback(
+    (e: DrawingActivityEntry) => {
+      setPanelOpen(false);
+      if (e.overlayId && publishedOverlays.some((o) => o.id === e.overlayId)) {
+        setSelectedPublishedOverlayId(e.overlayId);
+        setSelectedDraftDetector(null);
+        setSelectedDraftItemId(null);
+        setFocusPublishedTarget({ overlayId: e.overlayId, nonce: Date.now() });
+        return;
+      }
+      const dx = e.meta?.docX;
+      const dy = e.meta?.docY;
+      if (typeof dx === "number" && typeof dy === "number") {
+        setFocusPublishedTarget({ docX: dx, docY: dy, nonce: Date.now() });
+      }
+    },
+    [publishedOverlays],
+  );
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`drawing-activity:${drawingId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "drawing_activity_log",
+          filter: `drawing_id=eq.${drawingId}`,
+        },
+        (payload) => {
+          const n = payload.new as {
+            id: string;
+            drawing_id: string;
+            actor_id: string | null;
+            action: string;
+            overlay_id: string | null;
+            tool_type: string | null;
+            summary: string;
+            meta: unknown;
+            created_at: string;
+          };
+          const entry: DrawingActivityEntry = {
+            id: n.id,
+            drawingId: n.drawing_id,
+            actorId: n.actor_id ?? "",
+            actorName: null,
+            action: n.action as DrawingActivityEntry["action"],
+            overlayId: n.overlay_id,
+            toolType: n.tool_type,
+            summary: n.summary,
+            meta: (n.meta && typeof n.meta === "object" ? n.meta : {}) as DrawingActivityEntry["meta"],
+            createdAt: n.created_at,
+          };
+          const aid = n.actor_id ?? "";
+          if (aid && aid !== currentUserId) {
+            void supabase
+              .from("profiles")
+              .select("full_name")
+              .eq("id", aid)
+              .maybeSingle()
+              .then(({ data }) => {
+                const name = (data as { full_name: string | null } | null)?.full_name?.trim();
+                setRemoteToast({
+                  message: name ? `${name} har oppdatert tegningen` : "En bruker har oppdatert tegningen",
+                  until: Date.now() + 4800,
+                });
+                setActivityLog((prev) =>
+                  prev.map((x) => (x.id === entry.id ? { ...x, actorName: name ?? null } : x)),
+                );
+              });
+          }
+          setActivityLog((prev) => {
+            if (prev.some((x) => x.id === entry.id)) return prev;
+            return [entry, ...prev].slice(0, 120);
+          });
+          void reloadPublishedOverlays();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [drawingId, currentUserId, reloadPublishedOverlays]);
+
+  useEffect(() => {
+    if (!remoteToast) return;
+    if (Date.now() >= remoteToast.until) {
+      setRemoteToast(null);
+      return;
+    }
+    const t = window.setInterval(() => {
+      if (Date.now() >= remoteToast.until) setRemoteToast(null);
+    }, 500);
+    return () => clearInterval(t);
+  }, [remoteToast]);
 
   const storageKey = useMemo(() => `paint:draft:${drawingId}:${currentUserId}`, [drawingId, currentUserId]);
 
@@ -1814,11 +2037,20 @@ export function PaintWorkbench({
     taskFeedback,
     selectedDraftItemId,
     onActivateDraftRow: activateDraftRow,
+    activityLog,
+    onFocusActivityEntry: focusActivityEntry,
   };
 
   return (
     /* Root: canvas | inspector (valgfritt) | verktøyrail (fast høyre, desktop) */
     <div className="relative flex h-full overflow-hidden">
+      {remoteToast && Date.now() < remoteToast.until ? (
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-[90] max-w-[min(22rem,92vw)] -translate-x-1/2 px-3 sm:bottom-10">
+          <div className="rounded-lg border border-border bg-background/95 px-4 py-2.5 text-center text-sm font-medium text-foreground shadow-lg backdrop-blur-sm">
+            {remoteToast.message}
+          </div>
+        </div>
+      ) : null}
 
       {/* ── CANVAS COLUMN: canvas + mobile toolbar (flex column, no overlap) ── */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col touch-manipulation [-webkit-tap-highlight-color:transparent]">
@@ -1849,6 +2081,7 @@ export function PaintWorkbench({
             }}
             suppressStatusPanelOnSelection={activeTab === "drafts" && panelOpen}
             focusDraftRequest={focusDraftTarget}
+            focusPublishedRequest={focusPublishedTarget}
             panelOpen={panelOpen}
             onTogglePanel={() => setPanelOpen((v) => !v)}
             onOpenStatusPanel={() => {

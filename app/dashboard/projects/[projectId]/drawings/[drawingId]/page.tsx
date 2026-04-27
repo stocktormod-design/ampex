@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
-import type { CompanyMember, PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type {
+  CompanyMember,
+  DrawingActivityEntry,
+  PublishedOverlay,
+} from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 import type { DrawingTaskRow } from "@/app/dashboard/projects/drawing-tasks-actions";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -62,7 +66,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   }
 
   const adminClient = createAdminClient();
-  const [overlaysResult, profileResult, membersResult, tasksResult] = await Promise.all([
+  const [overlaysResult, profileResult, membersResult, tasksResult, activityResult] = await Promise.all([
     supabase
       .from("drawing_overlays")
       .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
@@ -76,6 +80,12 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
       .select("id, drawing_id, title, description, sort_order, completed_at, created_by, created_at, updated_at")
       .eq("drawing_id", drawing.id)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("drawing_activity_log")
+      .select("id, drawing_id, actor_id, action, overlay_id, tool_type, summary, meta, created_at")
+      .eq("drawing_id", drawing.id)
+      .order("created_at", { ascending: false })
+      .limit(80),
   ]);
 
   const { data: overlaysData } = overlaysResult;
@@ -89,6 +99,39 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
     : [];
 
   const initialTasks = ((tasksResult.data ?? []) as DrawingTaskRow[]) ?? [];
+
+  type ActivityDbRow = {
+    id: string;
+    drawing_id: string;
+    actor_id: string | null;
+    action: string;
+    overlay_id: string | null;
+    tool_type: string | null;
+    summary: string;
+    meta: unknown;
+    created_at: string;
+  };
+  const activityRows = (activityResult.data ?? []) as ActivityDbRow[];
+  const actorIds = Array.from(
+    new Set(activityRows.map((r) => r.actor_id).filter((x): x is string => Boolean(x))),
+  );
+  let actorNameById: Record<string, string | null> = {};
+  if (actorIds.length > 0) {
+    const { data: actorProfiles } = await supabase.from("profiles").select("id, full_name").in("id", actorIds);
+    actorNameById = Object.fromEntries((actorProfiles ?? []).map((a) => [a.id, a.full_name as string | null]));
+  }
+  const initialActivity: DrawingActivityEntry[] = activityRows.map((r) => ({
+    id: r.id,
+    drawingId: r.drawing_id,
+    actorId: r.actor_id ?? "",
+    actorName: r.actor_id ? (actorNameById[r.actor_id] ?? null) : null,
+    action: r.action as DrawingActivityEntry["action"],
+    overlayId: r.overlay_id,
+    toolType: r.tool_type,
+    summary: r.summary,
+    meta: (r.meta && typeof r.meta === "object" ? r.meta : {}) as DrawingActivityEntry["meta"],
+    createdAt: r.created_at,
+  }));
 
   const initialPublished = ((overlaysData ?? []) as {
     id: string;
@@ -122,6 +165,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
         currentUserId={user.id}
         initialPublished={initialPublished}
         initialTasks={initialTasks}
+        initialActivity={initialActivity}
         companyMembers={companyMembers}
       />
     </main>

@@ -14,6 +14,92 @@ const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
 const OVERLAY_TOOL_TYPES = new Set(["detector", "point", "line", "rect", "text"]);
 const VALID_DISCIPLINES = new Set(["fire", "power", "low_voltage"]);
+
+function buildActivityFocusMeta(toolType: string, payload: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!payload || typeof payload !== "object") return out;
+  const p = payload as Record<string, unknown>;
+  if ((toolType === "detector" || toolType === "point") && typeof p.x === "number" && typeof p.y === "number") {
+    out.docX = p.x;
+    out.docY = p.y;
+    return out;
+  }
+  if (toolType === "line" && p.type === "line") {
+    const x1 = Number(p.x1);
+    const y1 = Number(p.y1);
+    const x2 = Number(p.x2);
+    const y2 = Number(p.y2);
+    if ([x1, y1, x2, y2].every(Number.isFinite)) {
+      out.docX = (x1 + x2) / 2;
+      out.docY = (y1 + y2) / 2;
+    }
+    return out;
+  }
+  if (toolType === "rect" && p.type === "rect") {
+    const x = Number(p.x);
+    const y = Number(p.y);
+    const w = Number(p.w);
+    const h = Number(p.h);
+    if ([x, y, w, h].every(Number.isFinite)) {
+      out.docX = x + w / 2;
+      out.docY = y + h / 2;
+    }
+    return out;
+  }
+  if (toolType === "text" && p.type === "text" && typeof p.x === "number" && typeof p.y === "number") {
+    out.docX = p.x;
+    out.docY = p.y;
+  }
+  return out;
+}
+
+function buildActivitySummary(
+  action: "publish_overlay" | "delete_overlay" | "update_overlay",
+  toolType: string,
+): string {
+  const kind =
+    toolType === "detector"
+      ? "detektor"
+      : toolType === "point"
+        ? "punkt"
+        : toolType === "line"
+          ? "linje"
+          : toolType === "rect"
+            ? "rektangel"
+            : toolType === "text"
+              ? "tekst"
+              : "element";
+  if (action === "publish_overlay") return `Publiserte ${kind}`;
+  if (action === "delete_overlay") return `Fjernet ${kind}`;
+  return `Oppdaterte ${kind}`;
+}
+
+async function insertDrawingActivityLog(
+  adminClient: ReturnType<typeof createAdminClient>,
+  input: {
+    drawingId: string;
+    actorId: string | null;
+    action: "publish_overlay" | "delete_overlay" | "update_overlay";
+    overlayId: string | null;
+    toolType: string;
+    payload: unknown;
+  },
+): Promise<void> {
+  const meta = buildActivityFocusMeta(input.toolType, input.payload);
+  const summary = buildActivitySummary(input.action, input.toolType);
+  const { error } = await adminClient.from("drawing_activity_log").insert({
+    drawing_id: input.drawingId,
+    actor_id: input.actorId,
+    action: input.action,
+    overlay_id: input.overlayId,
+    tool_type: input.toolType || null,
+    summary,
+    meta,
+  });
+  if (error) {
+    console.error("drawing_activity_log insert failed:", error.message);
+  }
+}
 const MAX_OVERLAY_PHOTO_BYTES = 2 * 1024 * 1024;
 
 type CompanyProfile = {
@@ -451,6 +537,15 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
     return { ok: false as const, error: error?.message ?? "Kunne ikke publisere overlay" };
   }
 
+  await insertDrawingActivityLog(adminClient, {
+    drawingId,
+    actorId: userId,
+    action: "publish_overlay",
+    overlayId: (data as { id: string }).id,
+    toolType,
+    payload: normalized.payload,
+  });
+
   revalidatePath(`/dashboard/projects/${drawing.project_id}/drawings/${drawingId}`);
   return { ok: true as const, data };
 }
@@ -464,14 +559,15 @@ export async function deleteOverlayItem(overlayId: string): Promise<{ ok: boolea
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Ikke innlogget" };
 
-  // Look up drawing/project for path revalidation
   const { data: overlayRow } = await supabase
     .from("drawing_overlays")
-    .select("id, drawing_id")
+    .select("id, drawing_id, tool_type, payload")
     .eq("id", overlayId)
     .maybeSingle();
 
   if (!overlayRow) return { ok: false, error: "Element ikke funnet" };
+
+  const row = overlayRow as { id: string; drawing_id: string; tool_type: string; payload: unknown };
 
   const { error } = await supabase
     .from("drawing_overlays")
@@ -480,8 +576,17 @@ export async function deleteOverlayItem(overlayId: string): Promise<{ ok: boolea
 
   if (error) return { ok: false, error: error.message };
 
-  // Best-effort revalidation
-  const drawingId = (overlayRow as { id: string; drawing_id: string }).drawing_id;
+  const adminClient = createAdminClient();
+  await insertDrawingActivityLog(adminClient, {
+    drawingId: row.drawing_id,
+    actorId: user.id,
+    action: "delete_overlay",
+    overlayId: null,
+    toolType: String(row.tool_type ?? ""),
+    payload: row.payload,
+  });
+
+  const drawingId = row.drawing_id;
   revalidatePath(`/dashboard/projects`);
   revalidatePath(`/dashboard/projects/[projectId]/drawings/${drawingId}`, "page");
 
@@ -582,6 +687,15 @@ export async function updatePublishedOverlayPayload(
     .eq("id", overlayId);
 
   if (upErr) return { ok: false, error: upErr.message };
+
+  await insertDrawingActivityLog(adminClient, {
+    drawingId,
+    actorId: user.id,
+    action: "update_overlay",
+    overlayId,
+    toolType,
+    payload: normalized.payload,
+  });
 
   revalidatePath("/dashboard/projects");
   revalidatePath(`/dashboard/projects/${projectId}/drawings/${drawingId}`);

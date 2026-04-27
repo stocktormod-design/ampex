@@ -62,3 +62,24 @@ export type CompanyMember = {
   id: string;
   fullName: string | null;
 };
+
+export type DrawingActivityAction = "publish_overlay" | "delete_overlay" | "update_overlay";
+
+/** docX/docY er i PDF-/dokumentkoordinater (samme som overlay-payload x,y). */
+export type DrawingActivityFocusMeta = {
+  docX?: number;
+  docY?: number;
+};
+
+export type DrawingActivityEntry = {
+  id: string;
+  drawingId: string;
+  actorId: string;
+  actorName: string | null;
+  action: DrawingActivityAction;
+  overlayId: string | null;
+  toolType: string | null;
+  summary: string;
+  meta: DrawingActivityFocusMeta;
+  createdAt: string;
+};
