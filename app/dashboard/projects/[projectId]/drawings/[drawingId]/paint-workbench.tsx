@@ -1,8 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { ListTodo, Trash2 } from "lucide-react";
 import { publishOverlayItem, deleteOverlayItem, updateOverlayVisibility } from "@/app/dashboard/projects/actions";
+import {
+  createDrawingTask,
+  deleteDrawingTask,
+  setDrawingTaskCompleted,
+  type DrawingTaskRow,
+} from "@/app/dashboard/projects/drawing-tasks-actions";
+import { exportDetectorReportPdf, exportDetectorReportXml } from "@/app/dashboard/projects/drawing-detector-report-actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
 import type {
@@ -16,12 +25,15 @@ import type {
 } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
+  projectId: string;
+  projectName: string;
   drawingId: string;
   currentUserId: string;
   fileUrl: string;
   filePath: string;
   drawingName: string;
   initialPublished: PublishedOverlay[];
+  initialTasks: DrawingTaskRow[];
   companyMembers: CompanyMember[];
 };
 
@@ -107,6 +119,26 @@ function toPointChecklist(value?: PointChecklist): PointChecklist {
     photoPath: typeof v.photoPath === "string" ? v.photoPath : null,
     updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : null,
   };
+}
+
+function CollapseSection({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-xl border border-border bg-muted/20">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-xs font-bold text-foreground [&::-webkit-details-marker]:hidden">
+        <span>{title}</span>
+        <span className="text-[10px] font-normal text-muted-foreground transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <div className="space-y-3 border-t border-border px-3 pb-3 pt-2">{children}</div>
+    </details>
+  );
 }
 
 function NeonCheckbox({
@@ -305,10 +337,13 @@ function VisibilityPicker({
 
 /* ── Panel body – shared between desktop sidebar and mobile overlay ── */
 
+export type PanelTab = "status" | "drafts" | "tasks";
+
 type PanelBodyProps = {
   onClose: () => void;
-  activeTab: "status" | "drafts";
-  onSetActiveTab: (t: "status" | "drafts") => void;
+  projectName: string;
+  activeTab: PanelTab;
+  onSetActiveTab: (t: PanelTab) => void;
   activeTool: ToolId;
   activeLayer: OverlayLayer | null;
   layers: OverlayLayer[];
@@ -342,10 +377,20 @@ type PanelBodyProps = {
   onDeletePublished: (id: string) => Promise<void>;
   onUpdatePublishedVisibility: (id: string, visibleToUserIds: string[] | null) => Promise<void>;
   companyMembers: CompanyMember[];
+  drawingTasks: DrawingTaskRow[];
+  onAddDrawingTask: (title: string, description: string) => void;
+  onToggleDrawingTask: (taskId: string, completed: boolean) => void;
+  onDeleteDrawingTask: (taskId: string) => void;
+  pointSummaries: { source: "utkast" | "publisert"; layerName: string; comment: string }[];
+  reportBusy: boolean;
+  onExportDetectorPdf: () => void;
+  onExportDetectorXml: () => void;
+  taskFeedback: string | null;
 };
 
 function PanelBody({
   onClose,
+  projectName,
   activeTab,
   onSetActiveTab,
   activeTool,
@@ -378,7 +423,18 @@ function PanelBody({
   onDeletePublished,
   onUpdatePublishedVisibility,
   companyMembers,
+  drawingTasks,
+  onAddDrawingTask,
+  onToggleDrawingTask,
+  onDeleteDrawingTask,
+  pointSummaries,
+  reportBusy,
+  onExportDetectorPdf,
+  onExportDetectorXml,
+  taskFeedback,
 }: PanelBodyProps) {
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDesc, setNewTaskDesc] = useState("");
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
   const [editingVisibility, setEditingVisibility] = useState<string[] | null>(null);
   const [savingVisibility, setSavingVisibility] = useState(false);
@@ -395,23 +451,38 @@ function PanelBody({
     () => draftRows.filter((row) => selectedDraftKeys[row.localKey]).length,
     [draftRows, selectedDraftKeys],
   );
+
+  const sortedTasks = useMemo(() => {
+    return [...drawingTasks].sort((a, b) => {
+      const ac = a.completed_at ? 1 : 0;
+      const bc = b.completed_at ? 1 : 0;
+      if (ac !== bc) return ac - bc;
+      return a.sort_order - b.sort_order;
+    });
+  }, [drawingTasks]);
+
   return (
     <>
       {/* Tab bar */}
       <div className="flex shrink-0 items-stretch justify-between border-b border-border">
-        <div className="flex">
-          {(["status", "drafts"] as const).map((tab) => (
+        <div className="flex min-w-0">
+          {(["status", "tasks", "drafts"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => onSetActiveTab(tab)}
-              className={`relative px-5 py-3.5 text-sm font-semibold tracking-tight transition-colors ${
+              className={`relative flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-3 text-xs font-semibold tracking-tight transition-colors sm:px-4 sm:text-sm ${
                 activeTab === tab ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab === "status" ? "Status" : "Utkast"}
+              {tab === "status" ? "Status" : tab === "tasks" ? (
+                <>
+                  <ListTodo className="size-3.5 shrink-0 sm:hidden" aria-hidden />
+                  <span className="truncate">Oppgaver</span>
+                </>
+              ) : "Utkast"}
               {tab === "drafts" && draftRows.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                <span className="ml-0.5 shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                   {draftRows.length}
                 </span>
               )}
@@ -497,33 +568,32 @@ function PanelBody({
               </div>
             </div>
 
-            {/* Detektor status */}
+            {/* Detektor / punkt — kompakt med sammenlegg */}
             <div>
-              <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-sm font-bold text-foreground">Detektor-status</h2>
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-bold text-foreground">Element</h2>
                 {selectedDraftDetectorItem && (
-                  <span className="text-xs text-muted-foreground">{selectedDraftDetectorItem.layer.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">{selectedDraftDetectorItem.layer.name}</span>
                 )}
               </div>
 
               {selectedDraftDetectorItem ? (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {selectedDraftDetectorItem.item.type === "detector" && checklist ? (
-                    <>
-                      <NeonCheckbox
-                        checked={checklist.baseMounted}
-                        onChange={(v) => onUpdateChecklist({ baseMounted: v })}
-                        label="Sokkel montert"
-                      />
-                      <NeonCheckbox
-                        checked={checklist.detectorMounted}
-                        onChange={(v) => onUpdateChecklist({ detectorMounted: v })}
-                        label="Detektor montert"
-                      />
-
-                      <div>
-                        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Kappe</p>
-                        <div className="grid grid-cols-3 gap-2">
+                    <CollapseSection title="Montering og kappe" defaultOpen>
+                      <div className="space-y-2">
+                        <NeonCheckbox
+                          checked={checklist.baseMounted}
+                          onChange={(v) => onUpdateChecklist({ baseMounted: v })}
+                          label="Sokkel montert"
+                        />
+                        <NeonCheckbox
+                          checked={checklist.detectorMounted}
+                          onChange={(v) => onUpdateChecklist({ detectorMounted: v })}
+                          label="Detektor montert"
+                        />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Kappe på plass?</p>
+                        <div className="grid grid-cols-3 gap-1.5">
                           {(["yes", "no"] as const).map((v) => {
                             const active = checklist.capOn === v;
                             return (
@@ -531,7 +601,7 @@ function PanelBody({
                                 key={v}
                                 type="button"
                                 onClick={() => onUpdateChecklist({ capOn: v })}
-                                className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
+                                className={`rounded-lg border py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
                                   active
                                     ? "border-primary/40 bg-primary/10 text-foreground"
                                     : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
@@ -544,7 +614,7 @@ function PanelBody({
                           <button
                             type="button"
                             onClick={() => onUpdateChecklist({ capOn: null })}
-                            className={`rounded-xl border py-3 text-sm font-semibold transition-all active:scale-[0.97] ${
+                            className={`rounded-lg border py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
                               checklist.capOn === null
                                 ? "border-border bg-muted text-foreground"
                                 : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
@@ -554,15 +624,11 @@ function PanelBody({
                           </button>
                         </div>
                       </div>
-                    </>
+                    </CollapseSection>
                   ) : null}
 
-                  {/* Comment */}
-                  <div>
-                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Kommentar
-                    </label>
-                    <div className="mb-2 flex flex-wrap gap-1.5">
+                  <CollapseSection title="Notat" defaultOpen>
+                    <div className="flex flex-wrap gap-1">
                       {COMMENT_QUICK_TEXTS.map((snippet) => (
                         <button
                           key={snippet}
@@ -575,7 +641,7 @@ function PanelBody({
                             const next = cur.trim() ? `${cur.trim()}\n${snippet}` : snippet;
                             onUpdateChecklist({ comment: next });
                           }}
-                          className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-left text-xs text-foreground transition-colors hover:bg-muted"
+                          className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-left text-[11px] text-foreground transition-colors hover:bg-muted"
                         >
                           + {snippet}
                         </button>
@@ -584,95 +650,209 @@ function PanelBody({
                     <textarea
                       value={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.comment : pointChecklist?.comment) ?? ""}
                       onChange={(e) => onUpdateChecklist({ comment: e.target.value })}
-                      rows={3}
-                      className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none"
-                      placeholder={selectedDraftDetectorItem.item.type === "detector" ? "F.eks. Mangler strøm, følges opp..." : "Hva må følges opp her?"}
+                      rows={2}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none"
+                      placeholder={selectedDraftDetectorItem.item.type === "detector" ? "Kort notat…" : "Hva må følges opp?"}
                     />
-                  </div>
+                  </CollapseSection>
 
                   {selectedDraftDetectorItem.item.type === "detector" && checklist ? (
-                    <SerialNumberField
-                      serialNumber={checklist.serialNumber ?? ""}
-                      onUpdateSerialNumber={(value) => onUpdateChecklist({ serialNumber: value })}
-                    />
-                  ) : null}
-
-                  {/* Photo */}
-                  <div>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Bildevedlegg
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground active:bg-muted">
-                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                        </svg>
-                        Ta bilde
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="sr-only"
-                          onChange={(e) => {
-                            void onAttachPhoto(e.target.files?.[0] ?? null);
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground active:bg-muted">
-                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                        Velg fil
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="sr-only"
-                          onChange={(e) => {
-                            void onAttachPhoto(e.target.files?.[0] ?? null);
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                    </div>
-                    {((selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? null) ? (
-                      <img
-                        src={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? ""}
-                        alt="Vedlegg"
-                        className="mt-3 h-36 w-full rounded-xl border border-border object-cover"
+                    <CollapseSection title="Serienummer og bilde" defaultOpen={false}>
+                      <SerialNumberField
+                        serialNumber={checklist.serialNumber ?? ""}
+                        onUpdateSerialNumber={(value) => onUpdateChecklist({ serialNumber: value })}
                       />
-                    ) : (
-                      <p className="mt-2 text-center text-xs text-muted-foreground">Ingen vedlegg ennå</p>
-                    )}
-                    {draftError && (
-                      <p className="mt-2 text-xs font-semibold text-red-400">{draftError}</p>
-                    )}
-                  </div>
+                      <div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background py-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+                            <span>Ta bilde</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="sr-only"
+                              onChange={(e) => {
+                                void onAttachPhoto(e.target.files?.[0] ?? null);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                          <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background py-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+                            <span>Velg fil</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="sr-only"
+                              onChange={(e) => {
+                                void onAttachPhoto(e.target.files?.[0] ?? null);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {((selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? null) ? (
+                          <img
+                            src={(selectedDraftDetectorItem.item.type === "detector" ? checklist?.photoDataUrl : pointChecklist?.photoDataUrl) ?? ""}
+                            alt="Vedlegg"
+                            className="mt-2 max-h-28 w-full rounded-lg border border-border object-cover"
+                          />
+                        ) : (
+                          <p className="mt-2 text-center text-[11px] text-muted-foreground">Ingen bilde</p>
+                        )}
+                        {draftError && <p className="mt-1 text-xs font-semibold text-red-400">{draftError}</p>}
+                      </div>
+                    </CollapseSection>
+                  ) : (
+                    <CollapseSection title="Bilde (punkt)" defaultOpen={false}>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <label className="flex cursor-pointer items-center justify-center rounded-lg border border-border bg-background py-2 text-[11px] font-semibold text-muted-foreground">
+                          Ta bilde
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="sr-only"
+                            onChange={(e) => {
+                              void onAttachPhoto(e.target.files?.[0] ?? null);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        <label className="flex cursor-pointer items-center justify-center rounded-lg border border-border bg-background py-2 text-[11px] font-semibold text-muted-foreground">
+                          Velg fil
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              void onAttachPhoto(e.target.files?.[0] ?? null);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {(pointChecklist?.photoDataUrl ?? null) ? (
+                        <img src={pointChecklist?.photoDataUrl ?? ""} alt="Vedlegg" className="mt-2 max-h-28 w-full rounded-lg border object-cover" />
+                      ) : (
+                        <p className="mt-2 text-center text-[11px] text-muted-foreground">Ingen bilde</p>
+                      )}
+                      {draftError && <p className="mt-1 text-xs font-semibold text-red-400">{draftError}</p>}
+                    </CollapseSection>
+                  )}
                 </div>
               ) : (
-                <div className="rounded-xl border border-border bg-muted/30 px-4 py-8 text-center">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
-                    <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zm-7.518-.267A8.25 8.25 0 1120.25 10.5M8.288 14.212A5.25 5.25 0 1117.25 10.5" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-medium text-muted-foreground">Velg et detektor- eller punkt-element</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Trykk på et element i tegningen for å redigere statusen.
-                  </p>
+                <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-6 text-center">
+                  <p className="text-sm font-medium text-muted-foreground">Velg detektor eller punkt på tegningen</p>
                 </div>
               )}
             </div>
+          </div>
+        )}
 
-            {/* Tips box */}
-            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tips</p>
-              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-                <li>• Trykk på et detektor- eller punkt-element for status</li>
-                <li>• I linje-modus: dra i 4 håndtak for å bøye kurven</li>
-                <li>• Klyp for å zoome, bruk «Velg» + dra for å panorere</li>
-              </ul>
+        {/* ── TASKS TAB ── */}
+        {activeTab === "tasks" && (
+          <div className="space-y-4 px-4 py-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prosjekt</p>
+              <p className="text-sm font-semibold text-foreground">{projectName}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Oppgaver lagres i databasen og deles med teamet som har tilgang til tegningen.</p>
+            </div>
+
+            {taskFeedback && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{taskFeedback}</p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={reportBusy}
+                onClick={onExportDetectorPdf}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+              >
+                {reportBusy ? "…" : "PDF detektorrapport"}
+              </button>
+              <button
+                type="button"
+                disabled={reportBusy}
+                onClick={onExportDetectorXml}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+              >
+                {reportBusy ? "…" : "XML detektorrapport"}
+              </button>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-border bg-muted/15 p-3">
+              <p className="text-xs font-bold text-foreground">Ny oppgave</p>
+              <input
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="Tittel"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              />
+              <input
+                value={newTaskDesc}
+                onChange={(e) => setNewTaskDesc(e.target.value)}
+                placeholder="Beskrivelse (valgfritt)"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onAddDrawingTask(newTaskTitle, newTaskDesc);
+                  setNewTaskTitle("");
+                  setNewTaskDesc("");
+                }}
+                className="w-full rounded-lg bg-primary py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+              >
+                Legg til
+              </button>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Dine oppgaver</p>
+              {sortedTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Ingen oppgaver ennå.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {sortedTasks.map((t) => (
+                    <li key={t.id} className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0 rounded border-input"
+                        checked={Boolean(t.completed_at)}
+                        onChange={(e) => onToggleDrawingTask(t.id, e.target.checked)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-medium ${t.completed_at ? "text-muted-foreground line-through" : "text-foreground"}`}>{t.title}</p>
+                        {t.description ? <p className="text-xs text-muted-foreground">{t.description}</p> : null}
+                      </div>
+                      <button
+                        type="button"
+                        title="Slett"
+                        onClick={() => onDeleteDrawingTask(t.id)}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="size-3.5" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Punkter på tegningen</p>
+              {pointSummaries.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Ingen punkt-markører ennå.</p>
+              ) : (
+                <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-border bg-muted/10 p-2">
+                  {pointSummaries.map((p, idx) => (
+                    <li key={`${p.source}-${p.layerName}-${idx}`} className="text-xs text-foreground">
+                      <span className="font-semibold text-muted-foreground">[{p.source}]</span> {p.layerName}: {p.comment}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         )}
@@ -876,12 +1056,15 @@ function PanelBody({
 /* ── Main workbench ── */
 
 export function PaintWorkbench({
+  projectId,
+  projectName,
   drawingId,
   currentUserId,
   fileUrl,
   filePath,
   drawingName,
   initialPublished,
+  initialTasks,
   companyMembers,
 }: Props) {
   const [activeTool, setActiveTool] = useState<ToolId>("detector");
@@ -963,7 +1146,9 @@ export function PaintWorkbench({
   const [visibilityMap, setVisibilityMap] = useState<Record<string, string[] | null>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [selectedDraftItemId, setSelectedDraftItemId] = useState<{ layerId: string; itemId: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
+  const [activeTab, setActiveTab] = useState<PanelTab>("status");
+  const [drawingTasks, setDrawingTasks] = useState<DrawingTaskRow[]>(initialTasks);
+  const [reportBusy, setReportBusy] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const activeToolRef = useRef<ToolId>(activeTool);
@@ -1368,7 +1553,111 @@ export function PaintWorkbench({
       ? toPointChecklist(selectedDraftDetectorItem.item.checklist)
       : null;
 
+  const [taskFeedback, setTaskFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDrawingTasks(initialTasks);
+  }, [initialTasks]);
+
+  const pointSummaries = useMemo(() => {
+    const out: { source: "utkast" | "publisert"; layerName: string; comment: string }[] = [];
+    for (const layer of layers) {
+      for (const item of layer.items) {
+        if (item.type !== "point") continue;
+        const c = toPointChecklist(item.checklist);
+        out.push({ source: "utkast", layerName: layer.name, comment: c.comment.trim() || "—" });
+      }
+    }
+    for (const o of publishedOverlays) {
+      if (o.toolType !== "point") continue;
+      const p = o.payload as Extract<OverlayItem, { type: "point" }>;
+      const c = toPointChecklist(p.checklist);
+      out.push({ source: "publisert", layerName: o.layerName, comment: c.comment.trim() || "—" });
+    }
+    return out;
+  }, [layers, publishedOverlays]);
+
+  function handleAddDrawingTask(title: string, description: string) {
+    const t = title.trim();
+    if (!t) return;
+    setTaskFeedback(null);
+    startTransition(async () => {
+      const r = await createDrawingTask(projectId, drawingId, t, description);
+      if (r.ok) setDrawingTasks((prev) => [...prev, r.task]);
+      else setTaskFeedback(r.error);
+    });
+  }
+
+  function handleToggleDrawingTask(taskId: string, completed: boolean) {
+    setTaskFeedback(null);
+    startTransition(async () => {
+      const r = await setDrawingTaskCompleted(projectId, drawingId, taskId, completed);
+      if (r.ok) setDrawingTasks((prev) => prev.map((x) => (x.id === taskId ? r.task : x)));
+      else setTaskFeedback(r.error);
+    });
+  }
+
+  function handleDeleteDrawingTask(taskId: string) {
+    setTaskFeedback(null);
+    startTransition(async () => {
+      const r = await deleteDrawingTask(projectId, drawingId, taskId);
+      if (r.ok) setDrawingTasks((prev) => prev.filter((x) => x.id !== taskId));
+      else setTaskFeedback(r.error);
+    });
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleExportDetectorPdf() {
+    setTaskFeedback(null);
+    setReportBusy(true);
+    void (async () => {
+      try {
+        const r = await exportDetectorReportPdf(projectId, drawingId);
+        if (!r.ok) {
+          setTaskFeedback(r.error);
+          return;
+        }
+        const bin = atob(r.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+        triggerDownload(new Blob([bytes], { type: "application/pdf" }), r.filename);
+      } catch (e) {
+        setTaskFeedback(e instanceof Error ? e.message : "Kunne ikke lage PDF");
+      } finally {
+        setReportBusy(false);
+      }
+    })();
+  }
+
+  function handleExportDetectorXml() {
+    setTaskFeedback(null);
+    setReportBusy(true);
+    void (async () => {
+      try {
+        const r = await exportDetectorReportXml(projectId, drawingId);
+        if (!r.ok) {
+          setTaskFeedback(r.error);
+          return;
+        }
+        triggerDownload(new Blob([r.xml], { type: "application/xml;charset=utf-8" }), r.filename);
+      } catch (e) {
+        setTaskFeedback(e instanceof Error ? e.message : "Kunne ikke lage XML");
+      } finally {
+        setReportBusy(false);
+      }
+    })();
+  }
+
   const panelBodyProps: Omit<PanelBodyProps, "onClose"> = {
+    projectName,
     activeTab,
     onSetActiveTab: setActiveTab,
     activeTool,
@@ -1405,6 +1694,15 @@ export function PaintWorkbench({
     onDeletePublished: handleDeletePublished,
     onUpdatePublishedVisibility: handleUpdatePublishedVisibility,
     companyMembers,
+    drawingTasks,
+    onAddDrawingTask: handleAddDrawingTask,
+    onToggleDrawingTask: handleToggleDrawingTask,
+    onDeleteDrawingTask: handleDeleteDrawingTask,
+    pointSummaries,
+    reportBusy,
+    onExportDetectorPdf: handleExportDetectorPdf,
+    onExportDetectorXml: handleExportDetectorXml,
+    taskFeedback,
   };
 
   return (

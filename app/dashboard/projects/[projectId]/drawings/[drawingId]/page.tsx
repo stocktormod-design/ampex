@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
 import type { CompanyMember, PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type { DrawingTaskRow } from "@/app/dashboard/projects/drawing-tasks-actions";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -61,7 +62,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   }
 
   const adminClient = createAdminClient();
-  const [overlaysResult, profileResult, membersResult] = await Promise.all([
+  const [overlaysResult, profileResult, membersResult, tasksResult] = await Promise.all([
     supabase
       .from("drawing_overlays")
       .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
@@ -70,6 +71,11 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
       .order("created_at", { ascending: true }),
     supabase.from("profiles").select("company_id").eq("id", user.id).maybeSingle(),
     adminClient.from("profiles").select("id, full_name, company_id").order("full_name", { ascending: true }),
+    supabase
+      .from("drawing_tasks")
+      .select("id, drawing_id, title, description, sort_order, completed_at, created_by, created_at, updated_at")
+      .eq("drawing_id", drawing.id)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const { data: overlaysData } = overlaysResult;
@@ -82,11 +88,13 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
         .map((m) => ({ id: m.id, fullName: m.full_name }))
     : [];
 
+  const initialTasks = ((tasksResult.data ?? []) as DrawingTaskRow[]) ?? [];
+
   const initialPublished = ((overlaysData ?? []) as {
     id: string;
     drawing_id: string;
     created_by: string;
-    tool_type: "detector" | "line" | "rect" | "text";
+    tool_type: "detector" | "point" | "line" | "rect" | "text";
     layer_name: string;
     layer_color: string;
     payload: unknown;
@@ -105,12 +113,15 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
   return (
     <main className="h-full">
       <PaintWorkbench
+        projectId={project.id}
+        projectName={project.name}
         fileUrl={signed.signedUrl}
         filePath={drawing.file_path}
         drawingName={drawing.name}
         drawingId={drawing.id}
         currentUserId={user.id}
         initialPublished={initialPublished}
+        initialTasks={initialTasks}
         companyMembers={companyMembers}
       />
     </main>
