@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type TouchEvent, type WheelEvent } from "react";
-import type { OverlayItem, OverlayLayer, OverlayVisibility, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type { OverlayItem, OverlayLayer, ToolId } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
   fileUrl: string;
@@ -20,8 +20,6 @@ type Props = {
   onPinchZoom?: () => void;
   onSelectDraftItem?: (sel: { layerId: string; itemId: string } | null) => void;
   inlinePublish?: {
-    visibility: OverlayVisibility;
-    onSetVisibility: (v: OverlayVisibility) => void;
     onPublish: () => void;
     pending: boolean;
   } | null;
@@ -153,18 +151,14 @@ function distancePointToSegment(px: number, py: number, ax: number, ay: number, 
   return Math.hypot(px - cx, py - cy);
 }
 
+/** Samme utseende for utkast og publisert — synlighet for andre styres utenfor canvas. */
 function drawItem(
   ctx: CanvasRenderingContext2D,
   item: OverlayItem,
   color: string,
   isSelectedDetector: boolean,
-  isDraft: boolean = false,
 ) {
   ctx.save();
-  if (isDraft) {
-    ctx.globalAlpha = 0.72;
-    ctx.setLineDash([5, 4]);
-  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
@@ -179,7 +173,6 @@ function drawItem(
       ctx.setLineDash([]);
       ctx.stroke();
       ctx.lineWidth = 2;
-      if (isDraft) ctx.setLineDash([5, 4]);
     }
     ctx.fillStyle = fillColor;
     ctx.strokeStyle = fillColor;
@@ -191,13 +184,15 @@ function drawItem(
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.lineWidth = 2;
-    if (isDraft) {
-      ctx.setLineDash([4, 3]);
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 1.75;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
     if (item.label) {
       ctx.setLineDash([]);
       ctx.fillStyle = "#111827";
@@ -213,7 +208,6 @@ function drawItem(
       ctx.setLineDash([]);
       ctx.stroke();
       ctx.lineWidth = 2;
-      if (isDraft) ctx.setLineDash([5, 4]);
     }
     ctx.fillStyle = "#f59e0b";
     ctx.strokeStyle = "#111827";
@@ -222,13 +216,15 @@ function drawItem(
     ctx.arc(item.x, item.y, 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (isDraft) {
-      ctx.setLineDash([4, 3]);
-      ctx.strokeStyle = "#f59e0b";
-      ctx.beginPath();
-      ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#f59e0b";
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 1.75;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.fillStyle = "#111827";
     ctx.font = "bold 14px sans-serif";
@@ -300,7 +296,15 @@ export function PaintCanvas({
   const touchTapStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const initializedFitRef = useRef(false);
-  const canvasCursor = isPanning ? "cursor-grabbing" : activeTool === "select" || dragLineHandle ? "cursor-grab" : "cursor-crosshair";
+  const spaceHeldRef = useRef(false);
+  const middlePanRef = useRef(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
+  const canvasCursor = isPanning
+    ? "cursor-grabbing"
+    : spaceHeld || activeTool === "select" || !!dragLineHandle
+      ? "cursor-grab"
+      : "cursor-crosshair";
 
   useEffect(() => {
     let cancelled = false;
@@ -676,7 +680,6 @@ export function PaintCanvas({
 
     for (const layer of allLayers) {
       if (!layer.visible) continue;
-      const isLayerDraft = draftLayers.some((dl) => dl.id === layer.id);
       for (const item of layer.items) {
         const displayItem = toDisplayItem(item);
         const isSelectedDetector =
@@ -684,7 +687,7 @@ export function PaintCanvas({
           selectedDraftDetector?.layerId === layer.id &&
           selectedDraftDetector?.itemId === item.id;
         const isSelectedItem = selectedDraftItem?.layerId === layer.id && selectedDraftItem?.itemId === item.id;
-        drawItem(ctx, displayItem, layer.color, Boolean(isSelectedDetector), isLayerDraft);
+        drawItem(ctx, displayItem, layer.color, Boolean(isSelectedDetector));
         if (isSelectedItem && item.type === "rect" && displayItem.type === "rect") {
           ctx.save();
           ctx.strokeStyle = "#0ea5e9";
@@ -705,7 +708,7 @@ export function PaintCanvas({
     }
 
     if (draft && activeLayer) {
-      drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false, true);
+      drawItem(ctx, toDisplayItem(draft as OverlayItem), activeLayer.color, false);
     }
 
     const selectedLine = getSelectedLineWithPoints();
@@ -765,7 +768,21 @@ export function PaintCanvas({
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (e.pointerType === "touch") return;
+    // Middle mouse button = pan
+    if (e.button === 1) {
+      e.preventDefault();
+      middlePanRef.current = true;
+      setIsPanning(true);
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (e.button !== 0) return;
+    // Space bar held = temporary pan regardless of active tool
+    if (spaceHeldRef.current) {
+      setIsPanning(true);
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (!activeLayer) return;
     const pt = pointerToStage(e);
     const docPt = toDocPoint(pt);
@@ -896,6 +913,7 @@ export function PaintCanvas({
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
     if (e.pointerType === "touch") return;
+    setMouseCoords(pointerToStage(e));
     if (dragLineHandle) {
       const docPt = toDocPoint(pointerToStage(e));
       updateLineHandle(dragLineHandle, docPt);
@@ -929,6 +947,12 @@ export function PaintCanvas({
 
   function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
     if (e.pointerType === "touch") return;
+    if (e.button === 1) {
+      middlePanRef.current = false;
+      setIsPanning(false);
+      dragStartRef.current = null;
+      return;
+    }
     if (dragLineHandle) {
       setDragLineHandle(null);
       return;
@@ -971,6 +995,11 @@ export function PaintCanvas({
     }
     dragStartRef.current = null;
     setDraft(null);
+  }
+
+  function handlePointerLeave(e: PointerEvent<HTMLCanvasElement>) {
+    setMouseCoords(null);
+    onPointerUp(e);
   }
 
   function onTouchStart(e: TouchEvent<HTMLCanvasElement>) {
@@ -1337,17 +1366,53 @@ export function PaintCanvas({
   }
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.key !== "Delete" && e.key !== "Backspace") || !selectedDraftItem) return;
+    function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
-      e.preventDefault();
-      deleteSelectedItem();
+      const isInput =
+        target?.tagName?.toLowerCase() === "input" ||
+        target?.tagName?.toLowerCase() === "textarea" ||
+        Boolean(target?.isContentEditable);
+      if (e.code === "Space" && !isInput) {
+        e.preventDefault();
+        spaceHeldRef.current = true;
+        setSpaceHeld(true);
+        return;
+      }
+      if (isInput) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedDraftItem) {
+        e.preventDefault();
+        deleteSelectedItem();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        selectItem(null);
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        fitToViewport();
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        increaseZoom();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        decreaseZoom();
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.code === "Space") {
+        spaceHeldRef.current = false;
+        setSpaceHeld(false);
+        if (!middlePanRef.current) {
+          setIsPanning(false);
+          dragStartRef.current = null;
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [selectedDraftItem]);
+  }, [selectedDraftItem, isPanning, zoom]);
 
   return (
     <section className="relative h-full min-h-0 min-w-0 flex-1 bg-zinc-950 text-zinc-100">
@@ -1428,24 +1493,14 @@ export function PaintCanvas({
           {selectedDraftItem && inlinePublish && (
             <>
               <div className="mx-0.5 h-5 w-px shrink-0 bg-zinc-800" />
-              <div className="flex items-center gap-1 px-1">
-                <select
-                  value={inlinePublish.visibility}
-                  onChange={(e) => inlinePublish.onSetVisibility(e.target.value as OverlayVisibility)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 text-[10px] font-semibold text-zinc-300 focus:outline-none"
-                >
-                  <option value="all">Alle</option>
-                  <option value="admins">Kun admin</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={inlinePublish.pending}
-                  onClick={inlinePublish.onPublish}
-                  className="flex h-7 items-center rounded-lg bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-40"
-                >
-                  Publiser
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={inlinePublish.pending}
+                onClick={inlinePublish.onPublish}
+                className="flex h-7 items-center rounded-lg bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-40"
+              >
+                Publiser
+              </button>
             </>
           )}
 
@@ -1496,6 +1551,11 @@ export function PaintCanvas({
         ref={viewportRef}
         onWheel={onWheel}
         className="relative h-full w-full touch-none overflow-hidden bg-zinc-950"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
+          backgroundSize: `${Math.round(50 * zoom)}px ${Math.round(50 * zoom)}px`,
+          backgroundPosition: `calc(50% + ${panOffset.x}px) calc(50% + ${panOffset.y}px)`,
+        }}
       >
         <div
           className="absolute left-1/2 top-1/2 overflow-hidden rounded-sm border border-zinc-700/80 bg-white shadow-2xl"
@@ -1544,7 +1604,7 @@ export function PaintCanvas({
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            onPointerLeave={onPointerUp}
+            onPointerLeave={handlePointerLeave}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
@@ -1552,21 +1612,28 @@ export function PaintCanvas({
         </div>
       </div>
 
-      {/* ── Active tool indicator + legend – bottom-left corner ── */}
+      {/* ── Status HUD – bottom-left ── */}
       <div className="pointer-events-none absolute bottom-2 left-2 z-10 flex flex-col items-start gap-1 sm:bottom-3 sm:left-3">
         <div className="flex items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-900/90 px-3 py-1.5 shadow-lg backdrop-blur-sm">
           <span className="text-xs font-bold text-zinc-100">{TOOL_LABEL_NO[activeTool]}</span>
-          <span className="text-[10px] font-semibold text-zinc-500">[{TOOL_SHORTCUT_LABEL[activeTool]}]</span>
+          <span className="text-[10px] font-semibold text-zinc-600">[{TOOL_SHORTCUT_LABEL[activeTool]}]</span>
+          {mouseCoords && (
+            <>
+              <span className="h-3 w-px bg-zinc-700" />
+              <span className="font-mono text-[10px] tabular-nums text-zinc-500">
+                {Math.round(mouseCoords.x)}, {Math.round(mouseCoords.y)}
+              </span>
+            </>
+          )}
+          {spaceHeld && (
+            <>
+              <span className="h-3 w-px bg-zinc-700" />
+              <span className="text-[10px] font-bold text-cyan-400">Pan</span>
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-3 rounded-lg border border-zinc-800/50 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm">
-          <span className="flex items-center gap-1 text-[9px] text-zinc-500">
-            <span className="inline-block h-px w-5 border-b-2 border-dashed border-zinc-400 opacity-70" />
-            Utkast
-          </span>
-          <span className="flex items-center gap-1 text-[9px] text-zinc-500">
-            <span className="inline-block h-px w-5 border-b-2 border-zinc-400" />
-            Publisert
-          </span>
+        <div className="hidden items-center gap-3 rounded-lg border border-zinc-800/50 bg-zinc-950/80 px-2.5 py-1 backdrop-blur-sm sm:flex">
+          <span className="text-[9px] text-zinc-700">Spc=Pan · F=Fit · Del=Slett · Esc=Fravelg</span>
         </div>
       </div>
     </section>

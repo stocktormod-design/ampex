@@ -11,6 +11,8 @@ import {
   updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
+import { DrawingSearchFilterForm } from "@/app/dashboard/projects/[projectId]/drawing-search-filter-form";
+import { UploadVisibilityPicker } from "@/app/dashboard/projects/[projectId]/upload-visibility-picker";
 import { ProjectEditHeader } from "@/app/dashboard/projects/[projectId]/project-edit-header";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
@@ -409,6 +411,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium"
               />
             </div>
+
+            {companyProfiles.length > 1 && (
+              <UploadVisibilityPicker
+                members={companyProfiles.map((p) => ({ id: p.id, fullName: p.full_name }))}
+              />
+            )}
+
             <div className="flex items-center gap-3">
               <SubmitButton>Last opp som utkast</SubmitButton>
               <Link
@@ -433,28 +442,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Search + discipline filter ── */}
+      {/* ── Search + discipline filter (fagområde sender skjema automatisk) ── */}
       {(drawings.length > 0 || q || disc) && (
-        <form method="get" className="flex flex-wrap gap-2">
-          {showUpload && <input type="hidden" name="new" value="1" />}
-          <NativeInput
-            name="q"
-            defaultValue={searchParams?.q ?? ""}
-            placeholder="Søk i tegninger..."
-            className="flex-1 min-w-[160px]"
-          />
-          <select
-            name="disc"
-            defaultValue={disc}
-            className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">Alle fagområder</option>
-            {DISCIPLINE_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>{opt.label}</option>
-            ))}
-          </select>
-          <SubmitButton variant="outline" className="shrink-0">Søk</SubmitButton>
-        </form>
+        <DrawingSearchFilterForm
+          key={`${disc}-${searchParams?.q ?? ""}-${showUpload ? "1" : "0"}`}
+          showUpload={showUpload}
+          defaultQ={searchParams?.q ?? ""}
+          defaultDisc={disc}
+          disciplineOptions={DISCIPLINE_OPTIONS}
+        />
       )}
 
       {/* ── Empty state ── */}

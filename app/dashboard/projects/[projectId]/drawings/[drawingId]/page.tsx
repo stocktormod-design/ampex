@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { PaintWorkbench } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-workbench";
-import type { PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
+import type { CompanyMember, PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -59,12 +60,27 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
     redirect(`/dashboard/projects/${projectId}?error=Kunne+ikke+laste+tegning`);
   }
 
-  const { data: overlaysData } = await supabase
-    .from("drawing_overlays")
-    .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visibility_scope")
-    .eq("drawing_id", drawing.id)
-    .eq("is_published", true)
-    .order("created_at", { ascending: true });
+  const adminClient = createAdminClient();
+  const [overlaysResult, profileResult, membersResult] = await Promise.all([
+    supabase
+      .from("drawing_overlays")
+      .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
+      .eq("drawing_id", drawing.id)
+      .eq("is_published", true)
+      .order("created_at", { ascending: true }),
+    supabase.from("profiles").select("company_id").eq("id", user.id).maybeSingle(),
+    adminClient.from("profiles").select("id, full_name, company_id").order("full_name", { ascending: true }),
+  ]);
+
+  const { data: overlaysData } = overlaysResult;
+  const companyId = (profileResult.data as { company_id: string | null } | null)?.company_id ?? null;
+
+  const allMembers = ((membersResult.data ?? []) as { id: string; full_name: string | null; company_id?: string | null }[]);
+  const companyMembers: CompanyMember[] = companyId
+    ? allMembers
+        .filter((m) => (m as { company_id?: string | null }).company_id === companyId)
+        .map((m) => ({ id: m.id, fullName: m.full_name }))
+    : [];
 
   const initialPublished = ((overlaysData ?? []) as {
     id: string;
@@ -74,7 +90,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
     layer_name: string;
     layer_color: string;
     payload: unknown;
-    visibility_scope: "all" | "admins";
+    visible_to_user_ids: string[] | null;
   }[]).map((row) => ({
     id: row.id,
     drawingId: row.drawing_id,
@@ -83,7 +99,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
     layerName: row.layer_name,
     layerColor: row.layer_color,
     payload: row.payload as PublishedOverlay["payload"],
-    visibilityScope: row.visibility_scope,
+    visibleToUserIds: row.visible_to_user_ids,
   }));
 
   return (
@@ -95,6 +111,7 @@ export default async function DrawingPaintViewPage({ params }: PageProps) {
         drawingId={drawing.id}
         currentUserId={user.id}
         initialPublished={initialPublished}
+        companyMembers={companyMembers}
       />
     </main>
   );

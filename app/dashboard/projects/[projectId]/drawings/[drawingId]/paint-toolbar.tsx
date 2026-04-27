@@ -29,6 +29,10 @@ const TOOLS: ToolDef[] = [
   { id: "erase",    label: "Slett",    hint: "Slett element" },
 ];
 
+const SHORTCUT_KEYS: Record<ToolId, string> = {
+  select: "1", detector: "2", point: "3", line: "4", rect: "5", text: "6", erase: "7",
+};
+
 const ICONS: Record<ToolId, typeof MousePointer2> = {
   select:   MousePointer2,
   detector: Flame,
@@ -91,7 +95,7 @@ export function PaintToolbar({
                 key={tool.id}
                 type="button"
                 onClick={() => onSelectTool(tool.id)}
-                title={`${tool.label} — ${tool.hint}`}
+                title={`${tool.label} — ${tool.hint} [${SHORTCUT_KEYS[tool.id]}]`}
                 className={`relative flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2.5 transition-all active:scale-95 ${
                   isActive
                     ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25"
@@ -101,6 +105,9 @@ export function PaintToolbar({
                 {isActive && (
                   <span className="absolute inset-y-2 left-0 w-[2px] rounded-r-full bg-cyan-400" />
                 )}
+                <span className="absolute right-1 top-1 text-[7px] font-bold leading-none text-zinc-600 dark:text-zinc-700">
+                  {SHORTCUT_KEYS[tool.id]}
+                </span>
                 <Icon className="size-[15px] shrink-0" aria-hidden />
                 <span
                   className={`text-[7.5px] font-bold uppercase leading-none tracking-wide ${

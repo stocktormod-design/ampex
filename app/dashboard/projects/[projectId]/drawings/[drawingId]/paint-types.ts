@@ -44,7 +44,8 @@ export type OverlayLayer = {
   items: OverlayItem[];
 };
 
-export type OverlayVisibility = "all" | "admins";
+/** null = visible to all users with blueprint access; string[] = specific user IDs only */
+export type OverlayVisibility = string[] | null;
 
 export type PublishedOverlay = {
   id: string;
@@ -54,5 +55,10 @@ export type PublishedOverlay = {
   layerName: string;
   layerColor: string;
   payload: OverlayItem;
-  visibilityScope: OverlayVisibility;
+  visibleToUserIds: OverlayVisibility;
+};
+
+export type CompanyMember = {
+  id: string;
+  fullName: string | null;
 };

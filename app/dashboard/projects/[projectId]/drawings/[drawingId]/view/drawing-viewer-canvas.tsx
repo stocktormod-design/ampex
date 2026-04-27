@@ -75,19 +75,56 @@ function OverlaySvg({ overlays }: { overlays: PublishedOverlay[] }) {
       {overlays.map((o) => {
         const p = o.payload;
         const color = o.layerColor;
+        /* Samme geometri/stil som paint-canvas (redigering) — visning = det du la inn. */
         if (p.type === "detector") {
+          const fillColor = p.checklist?.capOn === "no" ? "#22c55e" : color;
           return (
             <g key={o.id}>
-              <circle cx={p.x} cy={p.y} r={13} fill="none" stroke={color} strokeWidth={2.5} />
-              <circle cx={p.x} cy={p.y} r={5} fill={color} />
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={8}
+                fill={fillColor}
+                stroke="#111827"
+                strokeWidth={1.5}
+              />
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={11}
+                fill="none"
+                stroke={color}
+                strokeWidth={1.75}
+                strokeOpacity={0.72}
+              />
             </g>
           );
         }
         if (p.type === "point") {
           return (
             <g key={o.id}>
-              <circle cx={p.x} cy={p.y} r={8} fill="none" stroke={color} strokeWidth={2.5} />
-              <circle cx={p.x} cy={p.y} r={3} fill={color} />
+              <circle cx={p.x} cy={p.y} r={8} fill="#f59e0b" stroke="#111827" strokeWidth={1.5} />
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={11}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth={1.75}
+                strokeOpacity={0.72}
+              />
+              <text
+                x={p.x}
+                y={p.y}
+                dy="0.35em"
+                textAnchor="middle"
+                fill="#111827"
+                fontSize={14}
+                fontFamily="sans-serif"
+                fontWeight="700"
+              >
+                !
+              </text>
             </g>
           );
         }
@@ -96,7 +133,7 @@ function OverlaySvg({ overlays }: { overlays: PublishedOverlay[] }) {
             p.c1x != null && p.c1y != null && p.c2x != null && p.c2y != null
               ? `M${p.x1},${p.y1} C${p.c1x},${p.c1y} ${p.c2x},${p.c2y} ${p.x2},${p.y2}`
               : `M${p.x1},${p.y1} L${p.x2},${p.y2}`;
-          return <path key={o.id} d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />;
+          return <path key={o.id} d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />;
         }
         if (p.type === "rect") {
           return (
@@ -106,23 +143,15 @@ function OverlaySvg({ overlays }: { overlays: PublishedOverlay[] }) {
               y={Math.min(p.y, p.y + p.h)}
               width={Math.abs(p.w)}
               height={Math.abs(p.h)}
-              fill={`${color}22`}
+              fill="none"
               stroke={color}
-              strokeWidth={2.5}
+              strokeWidth={2}
             />
           );
         }
         if (p.type === "text") {
           return (
-            <text
-              key={o.id}
-              x={p.x}
-              y={p.y}
-              fill={color}
-              fontSize={18}
-              fontFamily="sans-serif"
-              fontWeight="600"
-            >
+            <text key={o.id} x={p.x} y={p.y} fill={color} fontSize={14} fontFamily="sans-serif" fontWeight="400">
               {p.text}
             </text>
           );

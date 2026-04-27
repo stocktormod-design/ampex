@@ -13,7 +13,6 @@ const PROJECT_STATUS = new Set(["planning", "active", "completed"]);
 const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
 const OVERLAY_TOOL_TYPES = new Set(["detector", "point", "line", "rect", "text"]);
-const OVERLAY_VISIBILITY = new Set(["all", "admins"]);
 const VALID_DISCIPLINES = new Set(["fire", "power", "low_voltage"]);
 const MAX_OVERLAY_PHOTO_BYTES = 2 * 1024 * 1024;
 
@@ -248,6 +247,16 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
   const revisionInput = String(formData.get("revision") ?? "").trim();
   const disciplinesRaw = formData.getAll("disciplines").map((v) => String(v).trim());
   const disciplines = disciplinesRaw.filter((d) => VALID_DISCIPLINES.has(d));
+  const visibleToRaw = String(formData.get("visible_to_user_ids") ?? "").trim();
+  let visibleToUserIds: string[] | null = null;
+  if (visibleToRaw) {
+    try {
+      const parsed = JSON.parse(visibleToRaw) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        visibleToUserIds = (parsed as unknown[]).filter((v): v is string => typeof v === "string");
+      }
+    } catch { /* ignore — treat as null (all) */ }
+  }
   const fileInput = formData.get("pdf_file");
 
   if (!(fileInput instanceof File) || fileInput.size === 0) {
@@ -307,6 +316,7 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
     is_archived: false,
     is_published: false,
     drawing_status: "draft",
+    visible_to_user_ids: visibleToUserIds,
   });
 
   if (insertError) {
@@ -323,7 +333,7 @@ type PublishOverlayInput = {
   toolType: string;
   layerName: string;
   layerColor: string;
-  visibilityScope: string;
+  visibleToUserIds: string[] | null;
   payload: unknown;
 };
 
@@ -387,7 +397,7 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
   const toolType = String(input.toolType ?? "").trim();
   const layerName = String(input.layerName ?? "").trim() || "Lag";
   const layerColor = String(input.layerColor ?? "").trim() || "#ef4444";
-  const visibilityScope = String(input.visibilityScope ?? "all").trim();
+  const visibleToUserIds = Array.isArray(input.visibleToUserIds) ? input.visibleToUserIds : null;
   const payload = input.payload;
 
   if (!drawingId) {
@@ -395,9 +405,6 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
   }
   if (!OVERLAY_TOOL_TYPES.has(toolType)) {
     return { ok: false as const, error: "Ugyldig verktøytype" };
-  }
-  if (!OVERLAY_VISIBILITY.has(visibilityScope)) {
-    return { ok: false as const, error: "Ugyldig synlighetsvalg" };
   }
   if (!payload || typeof payload !== "object") {
     return { ok: false as const, error: "Ugyldig overlay-data" };
@@ -433,11 +440,11 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
       layer_color: layerColor,
       payload: normalized.payload,
       is_published: true,
-      visibility_scope: visibilityScope,
+      visible_to_user_ids: visibleToUserIds,
       published_at: new Date().toISOString(),
       published_by: userId,
     })
-    .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visibility_scope")
+    .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
     .single();
 
   if (error || !data) {
@@ -478,6 +485,50 @@ export async function deleteOverlayItem(overlayId: string): Promise<{ ok: boolea
   revalidatePath(`/dashboard/projects`);
   revalidatePath(`/dashboard/projects/[projectId]/drawings/${drawingId}`, "page");
 
+  return { ok: true };
+}
+
+export async function getCompanyMembers(): Promise<{ ok: boolean; members?: { id: string; fullName: string | null }[]; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Ikke innlogget" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!profile?.company_id) return { ok: false, error: "Ingen bedrift" };
+
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient
+    .from("profiles")
+    .select("id, full_name")
+    .eq("company_id", profile.company_id)
+    .order("full_name", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  return {
+    ok: true,
+    members: (data ?? []).map((p) => ({ id: p.id, fullName: p.full_name as string | null })),
+  };
+}
+
+export async function updateOverlayVisibility(
+  overlayId: string,
+  visibleToUserIds: string[] | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Ikke innlogget" };
+
+  const { error } = await supabase
+    .from("drawing_overlays")
+    .update({ visible_to_user_ids: visibleToUserIds })
+    .eq("id", overlayId);
+
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

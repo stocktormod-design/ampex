@@ -47,7 +47,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
     supabase.storage.from("drawings").createSignedUrl(drawing.file_path, 60 * 30),
     supabase
       .from("drawing_overlays")
-      .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visibility_scope")
+      .select("id, drawing_id, created_by, tool_type, layer_name, layer_color, payload, visible_to_user_ids")
       .eq("drawing_id", drawing.id)
       .eq("is_published", true)
       .order("created_at", { ascending: true }),
@@ -65,7 +65,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
     layer_name: string;
     layer_color: string;
     payload: unknown;
-    visibility_scope: "all" | "admins";
+    visible_to_user_ids: string[] | null;
   }[]).map((row) => ({
     id: row.id,
     drawingId: row.drawing_id,
@@ -74,7 +74,7 @@ export default async function DrawingViewerPage({ params }: PageProps) {
     layerName: row.layer_name,
     layerColor: row.layer_color,
     payload: row.payload as PublishedOverlay["payload"],
-    visibilityScope: row.visibility_scope,
+    visibleToUserIds: row.visible_to_user_ids,
   }));
 
   return (

@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import { publishOverlayItem, deleteOverlayItem } from "@/app/dashboard/projects/actions";
+import { publishOverlayItem, deleteOverlayItem, updateOverlayVisibility } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
 import type {
+  CompanyMember,
   DetectorChecklist,
   PointChecklist,
   OverlayItem,
   OverlayLayer,
-  OverlayVisibility,
   PublishedOverlay,
   ToolId,
 } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
@@ -22,6 +22,7 @@ type Props = {
   filePath: string;
   drawingName: string;
   initialPublished: PublishedOverlay[];
+  companyMembers: CompanyMember[];
 };
 
 const LAYER_COLORS = ["#ef4444", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2"];
@@ -237,6 +238,71 @@ function SerialNumberField({
   );
 }
 
+function VisibilityPicker({
+  members,
+  value,
+  onChange,
+}: {
+  members: CompanyMember[];
+  value: string[] | null;
+  onChange: (v: string[] | null) => void;
+}) {
+  const allSelected = value === null;
+  return (
+    <div className="space-y-1.5">
+      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Synlig for
+      </label>
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-all active:scale-[0.99] ${
+          allSelected
+            ? "border-primary/30 bg-primary/5 text-primary"
+            : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+        }`}
+      >
+        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${allSelected ? "border-primary bg-primary" : "border-border"}`}>
+          {allSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </span>
+        <span className="font-semibold">Alle med tilgang</span>
+      </button>
+      {members.map((m) => {
+        const selected = !allSelected && value.includes(m.id);
+        function toggle() {
+          if (allSelected) {
+            onChange([m.id]);
+            return;
+          }
+          const next = selected ? value.filter((id) => id !== m.id) : [...value, m.id];
+          onChange(next.length === 0 ? null : next);
+        }
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={toggle}
+            className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-all active:scale-[0.99] ${
+              selected
+                ? "border-primary/30 bg-primary/5 text-primary"
+                : "border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            }`}
+          >
+            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md border-2 transition-all ${selected ? "border-primary bg-primary/15" : "border-border bg-muted"}`}>
+              {selected && (
+                <svg className="h-2.5 w-2.5 text-primary" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                </svg>
+              )}
+            </span>
+            <span>{m.fullName ?? m.id.slice(0, 8)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Panel body – shared between desktop sidebar and mobile overlay ── */
 
 type PanelBodyProps = {
@@ -258,8 +324,8 @@ type PanelBodyProps = {
   onAttachPhoto: (file: File | null) => Promise<void>;
   draftError: string | null;
   draftRows: DraftPublishRow[];
-  visibilityMap: Record<string, OverlayVisibility>;
-  onSetVisibilityMap: React.Dispatch<React.SetStateAction<Record<string, OverlayVisibility>>>;
+  visibilityMap: Record<string, string[] | null>;
+  onSetVisibilityMap: React.Dispatch<React.SetStateAction<Record<string, string[] | null>>>;
   pending: boolean;
   publishError: string | null;
   onPublishOne: (row: DraftPublishRow) => void;
@@ -274,6 +340,8 @@ type PanelBodyProps = {
   onRedo: () => void;
   publishedOverlays: PublishedOverlay[];
   onDeletePublished: (id: string) => Promise<void>;
+  onUpdatePublishedVisibility: (id: string, visibleToUserIds: string[] | null) => Promise<void>;
+  companyMembers: CompanyMember[];
 };
 
 function PanelBody({
@@ -308,7 +376,21 @@ function PanelBody({
   onRedo,
   publishedOverlays,
   onDeletePublished,
+  onUpdatePublishedVisibility,
+  companyMembers,
 }: PanelBodyProps) {
+  const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
+  const [editingVisibility, setEditingVisibility] = useState<string[] | null>(null);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  async function saveOverlayVisibility() {
+    if (!editingOverlayId) return;
+    setSavingVisibility(true);
+    await onUpdatePublishedVisibility(editingOverlayId, editingVisibility);
+    setSavingVisibility(false);
+    setEditingOverlayId(null);
+  }
+
   const selectedCount = useMemo(
     () => draftRows.filter((row) => selectedDraftKeys[row.localKey]).length,
     [draftRows, selectedDraftKeys],
@@ -687,29 +769,21 @@ function PanelBody({
                         <span className="text-xs text-muted-foreground">{row.layerName}</span>
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={visibilityMap[row.localKey] ?? "all"}
-                        onChange={(e) =>
-                          onSetVisibilityMap((prev) => ({
-                            ...prev,
-                            [row.localKey]: e.target.value as OverlayVisibility,
-                          }))
-                        }
-                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-2 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                      >
-                        <option value="all">Synlig: alle</option>
-                        <option value="admins">Kun admin</option>
-                      </select>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onPublishOne(row)}
-                        className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
-                      >
-                        Publiser
-                      </button>
-                    </div>
+                    <VisibilityPicker
+                      members={companyMembers}
+                      value={visibilityMap[row.localKey] ?? null}
+                      onChange={(v) =>
+                        onSetVisibilityMap((prev) => ({ ...prev, [row.localKey]: v }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onPublishOne(row)}
+                      className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/10 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                    >
+                      Publiser
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -721,31 +795,74 @@ function PanelBody({
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   Publiserte elementer
                 </p>
-                <ul className="space-y-1.5">
-                  {publishedOverlays.map((o) => (
-                    <li
-                      key={o.id}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
-                    >
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: o.layerColor }}
-                      />
-                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-                        <span className="mr-1.5 rounded border border-border bg-muted px-1 py-0.5 font-bold uppercase text-[9px] tracking-widest">
-                          {o.toolType}
-                        </span>
-                        {o.layerName}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void onDeletePublished(o.id)}
-                        className="shrink-0 rounded-md border border-destructive/30 bg-background px-2 py-1 text-[10px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                <ul className="space-y-2">
+                  {publishedOverlays.map((o) => {
+                    const isEditing = editingOverlayId === o.id;
+                    const visLabel = o.visibleToUserIds === null
+                      ? "Alle"
+                      : o.visibleToUserIds.length === 0
+                        ? "Ingen"
+                        : o.visibleToUserIds
+                            .map((uid) => companyMembers.find((m) => m.id === uid)?.fullName ?? uid.slice(0, 6))
+                            .join(", ");
+                    return (
+                      <li
+                        key={o.id}
+                        className="rounded-xl border border-border bg-background p-3"
                       >
-                        Slett
-                      </button>
-                    </li>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: o.layerColor }} />
+                          <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                            <span className="mr-1.5 rounded border border-border bg-muted px-1 py-0.5 font-bold uppercase text-[9px] tracking-widest">
+                              {o.toolType}
+                            </span>
+                            {o.layerName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isEditing) {
+                                setEditingOverlayId(null);
+                              } else {
+                                setEditingOverlayId(o.id);
+                                setEditingVisibility(o.visibleToUserIds);
+                              }
+                            }}
+                            className="shrink-0 rounded-md border border-border bg-background px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            {isEditing ? "Avbryt" : "Rediger"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDeletePublished(o.id)}
+                            className="shrink-0 rounded-md border border-destructive/30 bg-background px-2 py-1 text-[10px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                          >
+                            Slett
+                          </button>
+                        </div>
+                        <p className="mt-1.5 truncate text-[10px] text-muted-foreground">
+                          Synlig: <span className="font-semibold text-foreground">{visLabel}</span>
+                        </p>
+                        {isEditing && (
+                          <div className="mt-3 space-y-2 border-t border-border pt-3">
+                            <VisibilityPicker
+                              members={companyMembers}
+                              value={editingVisibility}
+                              onChange={setEditingVisibility}
+                            />
+                            <button
+                              type="button"
+                              disabled={savingVisibility}
+                              onClick={() => void saveOverlayVisibility()}
+                              className="w-full rounded-lg border border-primary/30 bg-primary/10 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                            >
+                              {savingVisibility ? "Lagrer..." : "Lagre synlighet"}
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -765,6 +882,7 @@ export function PaintWorkbench({
   filePath,
   drawingName,
   initialPublished,
+  companyMembers,
 }: Props) {
   const [activeTool, setActiveTool] = useState<ToolId>("detector");
   const [layers, setLayersRaw] = useState<OverlayLayer[]>([newLayer(1)]);
@@ -832,11 +950,20 @@ export function PaintWorkbench({
       setPublishedOverlays((prev) => prev.filter((o) => o.id !== id));
     }
   }
+
+  async function handleUpdatePublishedVisibility(id: string, visibleToUserIds: string[] | null) {
+    const result = await updateOverlayVisibility(id, visibleToUserIds);
+    if (result.ok) {
+      setPublishedOverlays((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, visibleToUserIds } : o)),
+      );
+    }
+  }
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
+  const [visibilityMap, setVisibilityMap] = useState<Record<string, string[] | null>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
   const [selectedDraftItemId, setSelectedDraftItemId] = useState<{ layerId: string; itemId: string } | null>(null);
-  const [inlinePublishVisibility, setInlinePublishVisibility] = useState<OverlayVisibility>("all");
+  const [inlinePublishVisibleTo, setInlinePublishVisibleTo] = useState<string[] | null>(null);
   const [activeTab, setActiveTab] = useState<"status" | "drafts">("status");
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -1088,13 +1215,13 @@ export function PaintWorkbench({
     setPublishError(null);
     const snapshot = [...rows];
     for (const row of snapshot) {
-      const visibility = visibilityMap[row.localKey] ?? "all";
+      const visibleToUserIds = visibilityMap[row.localKey] ?? null;
       const result = await publishOverlayItem({
         drawingId,
         toolType: row.item.type,
         layerName: row.layerName,
         layerColor: row.layerColor,
-        visibilityScope: visibility,
+        visibleToUserIds,
         payload: row.item,
       });
       if (!result.ok) {
@@ -1110,7 +1237,7 @@ export function PaintWorkbench({
         layer_name: string;
         layer_color: string;
         payload: OverlayItem;
-        visibility_scope: OverlayVisibility;
+        visible_to_user_ids: string[] | null;
       };
       setPublishedOverlays((prev) => [
         ...prev,
@@ -1122,7 +1249,7 @@ export function PaintWorkbench({
           layerName: data.layer_name,
           layerColor: data.layer_color,
           payload: data.payload,
-          visibilityScope: data.visibility_scope,
+          visibleToUserIds: data.visible_to_user_ids,
         },
       ]);
       removeDraftRow(row);
@@ -1145,7 +1272,7 @@ export function PaintWorkbench({
   }
 
   function publishOne(row: DraftPublishRow) {
-    const visibility = visibilityMap[row.localKey] ?? "all";
+    const visibleToUserIds = visibilityMap[row.localKey] ?? null;
     setPublishError(null);
     startTransition(async () => {
       const result = await publishOverlayItem({
@@ -1153,7 +1280,7 @@ export function PaintWorkbench({
         toolType: row.item.type,
         layerName: row.layerName,
         layerColor: row.layerColor,
-        visibilityScope: visibility,
+        visibleToUserIds,
         payload: row.item,
       });
       if (!result.ok) {
@@ -1168,7 +1295,7 @@ export function PaintWorkbench({
         layer_name: string;
         layer_color: string;
         payload: OverlayItem;
-        visibility_scope: OverlayVisibility;
+        visible_to_user_ids: string[] | null;
       };
       setPublishedOverlays((prev) => [
         ...prev,
@@ -1180,7 +1307,7 @@ export function PaintWorkbench({
           layerName: data.layer_name,
           layerColor: data.layer_color,
           payload: data.payload,
-          visibilityScope: data.visibility_scope,
+          visibleToUserIds: data.visible_to_user_ids,
         },
       ]);
       removeDraftRow(row);
@@ -1197,7 +1324,7 @@ export function PaintWorkbench({
         toolType: row.item.type,
         layerName: row.layerName,
         layerColor: row.layerColor,
-        visibilityScope: inlinePublishVisibility,
+        visibleToUserIds: inlinePublishVisibleTo,
         payload: row.item,
       });
       if (!result.ok) {
@@ -1212,7 +1339,7 @@ export function PaintWorkbench({
         layer_name: string;
         layer_color: string;
         payload: OverlayItem;
-        visibility_scope: OverlayVisibility;
+        visible_to_user_ids: string[] | null;
       };
       setPublishedOverlays((prev) => [
         ...prev,
@@ -1224,7 +1351,7 @@ export function PaintWorkbench({
           layerName: data.layer_name,
           layerColor: data.layer_color,
           payload: data.payload,
-          visibilityScope: data.visibility_scope,
+          visibleToUserIds: data.visible_to_user_ids,
         },
       ]);
       removeDraftRow(row);
@@ -1276,6 +1403,8 @@ export function PaintWorkbench({
     onRedo: redo,
     publishedOverlays,
     onDeletePublished: handleDeletePublished,
+    onUpdatePublishedVisibility: handleUpdatePublishedVisibility,
+    companyMembers,
   };
 
   return (
@@ -1321,8 +1450,6 @@ export function PaintWorkbench({
             onPinchZoom={() => setActiveTool("select")}
             onSelectDraftItem={(sel) => setSelectedDraftItemId(sel)}
             inlinePublish={inlinePublishRow ? {
-              visibility: inlinePublishVisibility,
-              onSetVisibility: setInlinePublishVisibility,
               onPublish: publishInlineItem,
               pending,
             } : null}
