@@ -5,11 +5,17 @@ import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { updateProfile } from "./actions";
+import { ChangePasswordForm } from "./change-password-form";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams?: { error?: string; success?: string };
+  searchParams?: {
+    error?: string;
+    success?: string;
+    pw_error?: string;
+    pw_success?: string;
+  };
 };
 
 export default async function ProfilePage({ searchParams }: PageProps) {
@@ -92,6 +98,11 @@ export default async function ProfilePage({ searchParams }: PageProps) {
           <SubmitButton>Lagre endringer</SubmitButton>
         </form>
       </div>
+
+      <ChangePasswordForm
+        pwError={searchParams?.pw_error}
+        pwSuccess={searchParams?.pw_success === "1"}
+      />
     </div>
   );
 }

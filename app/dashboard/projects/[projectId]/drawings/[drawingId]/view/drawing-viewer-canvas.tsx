@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { PublishedOverlay } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-types";
 
 type Props = {
   fileUrl: string;
   filePath: string;
   drawingName: string;
+  overlays: PublishedOverlay[];
 };
 
 const DEFAULT_STAGE = { w: 1400, h: 980 };
@@ -60,7 +62,78 @@ function detectContentBounds(canvas: HTMLCanvasElement): Bounds | null {
   return { x: minX, y: minY, w, h };
 }
 
-export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
+const OVERLAY_STAGE = { w: 1400, h: 980 };
+
+function OverlaySvg({ overlays }: { overlays: PublishedOverlay[] }) {
+  return (
+    <svg
+      viewBox={`0 0 ${OVERLAY_STAGE.w} ${OVERLAY_STAGE.h}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      aria-hidden
+    >
+      {overlays.map((o) => {
+        const p = o.payload;
+        const color = o.layerColor;
+        if (p.type === "detector") {
+          return (
+            <g key={o.id}>
+              <circle cx={p.x} cy={p.y} r={13} fill="none" stroke={color} strokeWidth={2.5} />
+              <circle cx={p.x} cy={p.y} r={5} fill={color} />
+            </g>
+          );
+        }
+        if (p.type === "point") {
+          return (
+            <g key={o.id}>
+              <circle cx={p.x} cy={p.y} r={8} fill="none" stroke={color} strokeWidth={2.5} />
+              <circle cx={p.x} cy={p.y} r={3} fill={color} />
+            </g>
+          );
+        }
+        if (p.type === "line") {
+          const d =
+            p.c1x != null && p.c1y != null && p.c2x != null && p.c2y != null
+              ? `M${p.x1},${p.y1} C${p.c1x},${p.c1y} ${p.c2x},${p.c2y} ${p.x2},${p.y2}`
+              : `M${p.x1},${p.y1} L${p.x2},${p.y2}`;
+          return <path key={o.id} d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />;
+        }
+        if (p.type === "rect") {
+          return (
+            <rect
+              key={o.id}
+              x={Math.min(p.x, p.x + p.w)}
+              y={Math.min(p.y, p.y + p.h)}
+              width={Math.abs(p.w)}
+              height={Math.abs(p.h)}
+              fill={`${color}22`}
+              stroke={color}
+              strokeWidth={2.5}
+            />
+          );
+        }
+        if (p.type === "text") {
+          return (
+            <text
+              key={o.id}
+              x={p.x}
+              y={p.y}
+              fill={color}
+              fontSize={18}
+              fontFamily="sans-serif"
+              fontWeight="600"
+            >
+              {p.text}
+            </text>
+          );
+        }
+        return null;
+      })}
+    </svg>
+  );
+}
+
+export function DrawingViewerCanvas({ fileUrl, filePath, drawingName, overlays }: Props) {
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("manual");
   const [manualZoom, setManualZoom] = useState(1.5);
   const [fitZoom, setFitZoom] = useState(1);
@@ -346,12 +419,15 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
           >
             {isPdf ? (
               pdfPreviewUrl ? (
-                <img
-                  src={pdfPreviewUrl}
-                  alt={`${drawingName} PDF`}
-                  className="h-full w-full object-contain"
-                  style={{ imageRendering: "auto" }}
-                />
+                <>
+                  <img
+                    src={pdfPreviewUrl}
+                    alt={`${drawingName} PDF`}
+                    className="h-full w-full object-contain"
+                    style={{ imageRendering: "auto" }}
+                  />
+                  {overlays.length > 0 && <OverlaySvg overlays={overlays} />}
+                </>
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-zinc-100 p-4 text-center text-sm text-zinc-600">
                   <p>{pdfLoadError ?? "Laster PDF..."}</p>
@@ -368,12 +444,15 @@ export function DrawingViewerCanvas({ fileUrl, filePath, drawingName }: Props) {
                 </div>
               )
             ) : (
-              <img
-                src={fileUrl}
-                alt={drawingName}
-                className="h-full w-full object-contain"
-                style={{ imageRendering: "auto" }}
-              />
+              <>
+                <img
+                  src={fileUrl}
+                  alt={drawingName}
+                  className="h-full w-full object-contain"
+                  style={{ imageRendering: "auto" }}
+                />
+                {overlays.length > 0 && <OverlaySvg overlays={overlays} />}
+              </>
             )}
           </div>
         </div>

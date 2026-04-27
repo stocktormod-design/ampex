@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import { publishOverlayItem } from "@/app/dashboard/projects/actions";
+import { publishOverlayItem, deleteOverlayItem } from "@/app/dashboard/projects/actions";
 import { PaintCanvas } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-canvas";
 import { PaintToolbar } from "@/app/dashboard/projects/[projectId]/drawings/[drawingId]/paint-toolbar";
 import type {
@@ -272,6 +272,8 @@ type PanelBodyProps = {
   onToggleDraftKey: (key: string, checked: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+  publishedOverlays: PublishedOverlay[];
+  onDeletePublished: (id: string) => Promise<void>;
 };
 
 function PanelBody({
@@ -304,6 +306,8 @@ function PanelBody({
   onToggleDraftKey,
   onUndo,
   onRedo,
+  publishedOverlays,
+  onDeletePublished,
 }: PanelBodyProps) {
   const selectedCount = useMemo(
     () => draftRows.filter((row) => selectedDraftKeys[row.localKey]).length,
@@ -710,6 +714,41 @@ function PanelBody({
                 ))}
               </ul>
             )}
+
+            {/* Published overlays — delete without unpublishing */}
+            {publishedOverlays.length > 0 && (
+              <div className="mt-2 border-t border-border pt-4">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Publiserte elementer
+                </p>
+                <ul className="space-y-1.5">
+                  {publishedOverlays.map((o) => (
+                    <li
+                      key={o.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: o.layerColor }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                        <span className="mr-1.5 rounded border border-border bg-muted px-1 py-0.5 font-bold uppercase text-[9px] tracking-widest">
+                          {o.toolType}
+                        </span>
+                        {o.layerName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void onDeletePublished(o.id)}
+                        className="shrink-0 rounded-md border border-destructive/30 bg-background px-2 py-1 text-[10px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        Slett
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -786,6 +825,13 @@ export function PaintWorkbench({
   const [activeLayerId, setActiveLayerId] = useState<string>("");
   const [publishedOverlays, setPublishedOverlays] = useState<PublishedOverlay[]>(initialPublished);
   const [publishError, setPublishError] = useState<string | null>(null);
+
+  async function handleDeletePublished(id: string) {
+    const result = await deleteOverlayItem(id);
+    if (result.ok) {
+      setPublishedOverlays((prev) => prev.filter((o) => o.id !== id));
+    }
+  }
   const [draftError, setDraftError] = useState<string | null>(null);
   const [visibilityMap, setVisibilityMap] = useState<Record<string, OverlayVisibility>>({});
   const [selectedDraftDetector, setSelectedDraftDetector] = useState<{ layerId: string; itemId: string } | null>(null);
@@ -1228,6 +1274,8 @@ export function PaintWorkbench({
       setSelectedDraftKeys((prev) => ({ ...prev, [key]: checked })),
     onUndo: undo,
     onRedo: redo,
+    publishedOverlays,
+    onDeletePublished: handleDeletePublished,
   };
 
   return (

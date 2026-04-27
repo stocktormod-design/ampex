@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Pencil, FileText, Eye, ChevronLeft } from "lucide-react";
+import { Plus, Pencil, FileText, Eye, ChevronLeft, Send, Archive, ArchiveRestore } from "lucide-react";
 import {
+  archiveDrawing,
   convertProjectImagesToPdf,
   deleteDraftDrawing,
+  publishDrawing,
   setProjectBlueprintAccess,
+  unarchiveDrawing,
   updateProjectStatus,
   uploadDrawingPdf,
 } from "@/app/dashboard/projects/actions";
@@ -21,7 +24,7 @@ type PageProps = {
   params: Promise<{ projectId: string }> | { projectId: string };
   searchParams?: {
     q?: string;
-    view?: string;
+    disc?: string;
     new?: string;
     error?: string;
     success?: string;
@@ -36,6 +39,11 @@ type DrawingRow = {
   is_published: boolean;
   published_at: string | null;
   created_at: string;
+  drawing_status: string;
+  pipeline: string;
+  is_archived: boolean;
+  revision_group_id: string | null;
+  disciplines: string[];
 };
 
 type ProjectRow = {
@@ -58,6 +66,18 @@ const STATUS_COLOR: Record<string, string> = {
   completed: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
+const DISCIPLINE_OPTIONS = [
+  { id: "fire", label: "Brann" },
+  { id: "power", label: "Sterkstrøm" },
+  { id: "low_voltage", label: "Svakstrøm" },
+] as const;
+
+const DISCIPLINE_STYLE: Record<string, string> = {
+  fire: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
+  power: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+  low_voltage: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+};
+
 function fmtDate(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("nb-NO", {
@@ -65,6 +85,34 @@ function fmtDate(value: string | null): string {
     month: "2-digit",
     year: "2-digit",
   });
+}
+
+function DisciplineChip({ id }: { id: string }) {
+  const opt = DISCIPLINE_OPTIONS.find((o) => o.id === id);
+  if (!opt) return null;
+  const style = DISCIPLINE_STYLE[id] ?? "";
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style}`}>
+      {opt.label}
+    </span>
+  );
+}
+
+function markCurrentRevisions(official: DrawingRow[]): Set<string> {
+  // Group by revision_group_id (if set) or by normalised name as fallback
+  const byGroup = new Map<string, DrawingRow>();
+  for (const d of official) {
+    const key = d.revision_group_id ?? `__name__${d.name.toLowerCase().trim()}`;
+    const existing = byGroup.get(key);
+    if (!existing) {
+      byGroup.set(key, d);
+    } else {
+      const existingDate = existing.published_at ?? existing.created_at;
+      const dDate = d.published_at ?? d.created_at;
+      if (dDate > existingDate) byGroup.set(key, d);
+    }
+  }
+  return new Set(Array.from(byGroup.values()).map((d) => d.id));
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
@@ -94,7 +142,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const [drawingsRes, blueprintProfilesRes, blueprintAccessRes, blockedRpc] = await Promise.all([
     supabase
       .from("drawings")
-      .select("id, name, revision, file_path, is_published, published_at, created_at")
+      .select("id, name, revision, file_path, is_published, published_at, created_at, drawing_status, pipeline, is_archived, revision_group_id, disciplines")
       .eq("project_id", project.id)
       .order("created_at", { ascending: false }),
     isAdmin
@@ -117,36 +165,44 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const blueprintAllowedIds = new Set((blueprintAccessRes.data ?? []).map((r) => r.user_id));
   const blueprintAccessBlocked = blockedRpc.data === true;
 
-  const q            = searchParams?.q?.trim().toLowerCase() ?? "";
-  const requestedView = searchParams?.view ?? "all";
-  const view         = isAdmin ? requestedView : "published";
-  const showUpload   = searchParams?.new === "1" && isAdmin;
+  const q    = searchParams?.q?.trim().toLowerCase() ?? "";
+  const disc = searchParams?.disc?.trim() ?? "";
+  const showUpload = searchParams?.new === "1" && isAdmin;
 
-  const publishedCount = drawings.filter((d) => d.is_published).length;
-  const draftCount = drawings.filter((d) => !d.is_published).length;
-
-  const visible = drawings.filter((row) => {
-    if (view === "draft"     && row.is_published)  return false;
-    if (view === "published" && !row.is_published) return false;
-    if (!isAdmin && !row.is_published)             return false;
+  function matchesFilter(row: DrawingRow): boolean {
+    if (disc && (!row.disciplines || !row.disciplines.includes(disc))) return false;
     if (!q) return true;
     return (
       row.name.toLowerCase().includes(q) ||
       (row.revision?.toLowerCase().includes(q) ?? false)
     );
-  });
+  }
 
-  const uploadAction = uploadDrawingPdf.bind(null, project.id);
+  const official         = drawings.filter((d) => d.pipeline === "official" && !d.is_archived && matchesFilter(d));
+  const drafts           = drawings.filter((d) => d.pipeline === "draft"    && !d.is_archived && matchesFilter(d));
+  const archivedOfficial = drawings.filter((d) => d.is_archived && d.pipeline === "official"  && matchesFilter(d));
+  const archivedDraft    = drawings.filter((d) => d.is_archived && d.pipeline === "draft"     && matchesFilter(d));
+
+  const currentRevIds = markCurrentRevisions(official);
+
+  const officialCount = drawings.filter((d) => d.pipeline === "official" && !d.is_archived).length;
+  const draftCount    = drawings.filter((d) => d.pipeline === "draft"    && !d.is_archived).length;
+  const archivedCount = drawings.filter((d) => d.is_archived).length;
+
+  const uploadAction       = uploadDrawingPdf.bind(null, project.id);
   const updateStatusAction = updateProjectStatus;
 
   const successMsg = (() => {
     if (!searchParams?.success) return null;
-    if (searchParams.success === "status-updated") return "Status oppdatert.";
-    if (searchParams.success === "project-updated") return "Prosjekt oppdatert.";
-    if (searchParams.success === "upload-ok") return "Tegning lastet opp.";
-    if (searchParams.success === "published") return "Tegning publisert.";
-    if (searchParams.success === "unpublished") return "Tegning satt til utkast.";
-    if (searchParams.success === "draft-deleted") return "Utkast slettet.";
+    if (searchParams.success === "status-updated")   return "Status oppdatert.";
+    if (searchParams.success === "project-updated")  return "Prosjekt oppdatert.";
+    if (searchParams.success === "upload-ok")        return "Tegning lastet opp som utkast. Publiser den for å gjøre den synlig.";
+    if (searchParams.success === "published")        return "Tegning publisert.";
+    if (searchParams.success === "unpublished")      return "Tegning satt tilbake til utkast.";
+    if (searchParams.success === "draft-deleted")    return "Utkast slettet.";
+    if (searchParams.success === "archived")                return "Tegning arkivert.";
+    if (searchParams.success === "unarchived-official")    return "Tegning gjenopprettet som offisiell.";
+    if (searchParams.success === "unarchived-draft")       return "Tegning gjenopprettet som utkast.";
     if (searchParams.success === "blueprint-access") return "Tegningstilgang er oppdatert.";
     if (searchParams.success.startsWith("converted-")) {
       return `Konverterte ${searchParams.success.replace("converted-", "")} filer til PDF.`;
@@ -183,7 +239,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               <p className="text-xs text-muted-foreground">
                 Opprettet {fmtDate(project.created_at)}
                 {drawings.length > 0 && (
-                  <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+                  <>
+                    {" · "}
+                    {officialCount} offisiell{draftCount > 0 ? `, ${draftCount} utkast` : ""}
+                    {archivedCount > 0 ? `, ${archivedCount} arkivert` : ""}
+                  </>
                 )}
               </p>
             }
@@ -216,7 +276,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               <p className="mt-1 text-xs text-muted-foreground">
                 Opprettet {fmtDate(project.created_at)}
                 {drawings.length > 0 && (
-                  <> · {publishedCount} publisert{draftCount > 0 ? `, ${draftCount} utkast` : ""}</>
+                  <> · {officialCount} offisiell</>
                 )}
               </p>
             </div>
@@ -229,12 +289,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         <details className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <summary className="cursor-pointer list-none text-base font-semibold">
             Tegningstilgang
-            <span className="ml-2 text-xs font-normal text-muted-foreground">(klikk for aa utvide)</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(klikk for å utvide)</span>
           </summary>
           <p className="mt-3 text-sm text-muted-foreground">
-            Velg hvilke brukere som får se <span className="font-medium text-foreground">publiserte</span> tegninger på
+            Velg hvilke brukere som får se <span className="font-medium text-foreground">offisielle</span> tegninger på
             dette prosjektet. Administratorer ser alltid alt. La alle bokser stå <span className="font-medium text-foreground">av</span> for å
-            tillate alle som allerede har prosjekttilgang (tildelt i prosjektet).
+            tillate alle som allerede har prosjekttilgang.
           </p>
           <form action={setProjectBlueprintAccess} className="mt-4 space-y-3">
             <input type="hidden" name="project_id" value={project.id} />
@@ -319,6 +379,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 <NativeInput id="drawing-revision" name="revision" placeholder="Rev B" autoComplete="off" />
               </div>
             </div>
+
+            {/* Disciplines */}
+            <div className="space-y-2">
+              <NativeLabel>Fagområde (valgfritt, flere kan velges)</NativeLabel>
+              <div className="flex flex-wrap gap-3">
+                {DISCIPLINE_OPTIONS.map((opt) => (
+                  <label key={opt.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="disciplines"
+                      value={opt.id}
+                      className="size-4 rounded border-input"
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <NativeLabel htmlFor="pdf-file">Fil (PDF, JPEG eller PNG — maks 25 MB)</NativeLabel>
               <input
@@ -331,7 +410,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               />
             </div>
             <div className="flex items-center gap-3">
-              <SubmitButton>Last opp og publiser</SubmitButton>
+              <SubmitButton>Last opp som utkast</SubmitButton>
               <Link
                 href={`/dashboard/projects/${projectId}`}
                 className="text-sm text-muted-foreground hover:text-foreground"
@@ -354,8 +433,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Search + view filter (admin only) ── */}
-      {(drawings.length > 0 || q) && (
+      {/* ── Search + discipline filter ── */}
+      {(drawings.length > 0 || q || disc) && (
         <form method="get" className="flex flex-wrap gap-2">
           {showUpload && <input type="hidden" name="new" value="1" />}
           <NativeInput
@@ -364,31 +443,28 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             placeholder="Søk i tegninger..."
             className="flex-1 min-w-[160px]"
           />
-          {isAdmin && (
-            <select
-              name="view"
-              defaultValue={view}
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="all">Alle ({drawings.length})</option>
-              <option value="published">Publisert ({publishedCount})</option>
-              <option value="draft">Utkast ({draftCount})</option>
-            </select>
-          )}
+          <select
+            name="disc"
+            defaultValue={disc}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">Alle fagområder</option>
+            {DISCIPLINE_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
           <SubmitButton variant="outline" className="shrink-0">Søk</SubmitButton>
         </form>
       )}
 
-      {/* ── Drawings list ── */}
-      {visible.length === 0 ? (
+      {/* ── Empty state ── */}
+      {drawings.length === 0 && (
         <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
           <FileText className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
           <p className="text-sm font-medium text-muted-foreground">
-            {blueprintAccessBlocked && !q
-              ? "Du har ikke tilgang til tegninger på dette prosjektet. Be en administrator legge deg til under «Tegningstilgang», eller fjerne begrensningen."
-              : q
-                ? "Ingen tegninger matcher søket."
-                : "Ingen tegninger ennå."}
+            {blueprintAccessBlocked
+              ? "Du har ikke tilgang til tegninger på dette prosjektet. Be en administrator legge deg til under «Tegningstilgang»."
+              : "Ingen tegninger ennå."}
           </p>
           {isAdmin && !showUpload && (
             <Link
@@ -400,62 +476,289 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             </Link>
           )}
         </div>
+      )}
+
+      {/* ── Official revisions section ── */}
+      {(drawings.length > 0 || q || disc) && (
+        <DrawingSection
+          title="Gjeldende revisjoner"
+          drawings={official}
+          emptyMessage={q || disc ? "Ingen treff." : "Ingen offisielle revisjoner ennå."}
+          renderActions={(row) => (
+            <>
+              <Link
+                href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
+                title="Åpne i editor"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+              >
+                <Pencil className="size-3.5" aria-hidden />
+                <span className="hidden sm:inline">Editor</span>
+              </Link>
+              <Link
+                href={`/dashboard/projects/${project.id}/drawings/${row.id}/view`}
+                title="Vis tegning"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+              >
+                <Eye className="size-3.5" aria-hidden />
+                <span className="hidden sm:inline">Vis</span>
+              </Link>
+              {isAdmin && (
+                <form action={archiveDrawing}>
+                  <input type="hidden" name="drawing_id" value={row.id} />
+                  <button
+                    type="submit"
+                    title="Arkiver tegning"
+                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Archive className="size-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Arkiver</span>
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+          renderBadge={(row) => {
+            if (!currentRevIds.has(row.id)) return null;
+            // Only show badge when there are multiple revisions in the same group
+            const groupKey = row.revision_group_id ?? `__name__${row.name.toLowerCase().trim()}`;
+            const groupSize = official.filter((d) =>
+              (d.revision_group_id ?? `__name__${d.name.toLowerCase().trim()}`) === groupKey
+            ).length;
+            return groupSize > 1 ? (
+              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                Gjeldende
+              </span>
+            ) : null;
+          }}
+        />
+      )}
+
+      {/* ── Drafts section (admin only) ── */}
+      {isAdmin && drawings.some((d) => d.pipeline === "draft" && !d.is_archived) && (
+        <DrawingSection
+          title="Utkast"
+          titleNote="Ikke synlig for montører"
+          drawings={drafts}
+          emptyMessage={q || disc ? "Ingen utkast matcher søket." : ""}
+          renderActions={(row) => (
+            <>
+              <form action={publishDrawing}>
+                <input type="hidden" name="drawing_id" value={row.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <Send className="size-3.5" aria-hidden />
+                  <span>Publiser</span>
+                </button>
+              </form>
+              <Link
+                href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
+                title="Åpne i editor"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+              >
+                <Pencil className="size-3.5" aria-hidden />
+                <span className="hidden sm:inline">Editor</span>
+              </Link>
+              <form action={deleteDraftDrawing}>
+                <input type="hidden" name="drawing_id" value={row.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-destructive/30 bg-background px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+                >
+                  Slett
+                </button>
+              </form>
+            </>
+          )}
+          renderBadge={() => null}
+        />
+      )}
+
+      {/* ── Archived section (admin only, collapsed) ── */}
+      {isAdmin && drawings.some((d) => d.is_archived) && (
+        <details className="rounded-xl border border-border bg-card shadow-sm">
+          <summary className="cursor-pointer list-none px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-muted-foreground">Arkivert</span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                {archivedCount}
+              </span>
+              <span className="text-xs text-muted-foreground">(klikk for å utvide)</span>
+            </div>
+          </summary>
+          <div className="border-t border-border divide-y divide-border">
+            {/* Subsection A: Official archived */}
+            {(archivedOfficial.length > 0 || (q || disc) && drawings.some((d) => d.is_archived && d.pipeline === "official")) && (
+              <div className="px-5 py-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Offisielle (arkiverte revisjoner)
+                </p>
+                {archivedOfficial.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Ingen arkiverte offisielle tegninger matcher søket.</p>
+                ) : (
+                  <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-background">
+                    {archivedOfficial.map((row) => (
+                      <DrawingListItem
+                        key={row.id}
+                        row={row}
+                        badge={null}
+                        actions={
+                          <ArchivedActions row={row} projectId={project.id} />
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {/* Subsection B: Draft archived */}
+            {(archivedDraft.length > 0 || (q || disc) && drawings.some((d) => d.is_archived && d.pipeline === "draft")) && (
+              <div className="px-5 py-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Utkast (arkiverte)
+                </p>
+                {archivedDraft.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Ingen arkiverte utkast matcher søket.</p>
+                ) : (
+                  <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-background">
+                    {archivedDraft.map((row) => (
+                      <DrawingListItem
+                        key={row.id}
+                        row={row}
+                        badge={null}
+                        actions={
+                          <ArchivedActions row={row} projectId={project.id} />
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {archivedOfficial.length === 0 && archivedDraft.length === 0 && (
+              <p className="px-5 py-4 text-sm text-muted-foreground">Ingen arkiverte tegninger matcher søket.</p>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function ArchivedActions({ row, projectId }: { row: DrawingRow; projectId: string }) {
+  return (
+    <>
+      <form action={unarchiveDrawing}>
+        <input type="hidden" name="drawing_id" value={row.id} />
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+        >
+          <ArchiveRestore className="size-3.5" aria-hidden />
+          <span className="hidden sm:inline">Gjenopprett</span>
+        </button>
+      </form>
+      <Link
+        href={`/dashboard/projects/${projectId}/drawings/${row.id}/view`}
+        title="Vis tegning"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+      >
+        <Eye className="size-3.5" aria-hidden />
+        <span className="hidden sm:inline">Vis</span>
+      </Link>
+    </>
+  );
+}
+
+function DrawingListItem({
+  row,
+  badge,
+  actions,
+}: {
+  row: DrawingRow;
+  badge: React.ReactNode;
+  actions: React.ReactNode;
+}) {
+  function fmtDate(value: string | null): string {
+    if (!value) return "—";
+    return new Date(value).toLocaleDateString("nb-NO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    });
+  }
+
+  return (
+    <li>
+      <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="truncate font-medium text-foreground">{row.name}</p>
+            {badge}
+            {(row.disciplines ?? []).map((d) => (
+              <DisciplineChip key={d} id={d} />
+            ))}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {row.revision ? `Rev. ${row.revision} · ` : ""}
+            {fmtDate(row.created_at)}
+            {row.pipeline === "official" && row.published_at && row.published_at !== row.created_at && (
+              <> · Publisert {fmtDate(row.published_at)}</>
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+      </div>
+    </li>
+  );
+}
+
+function DrawingSection({
+  title,
+  titleNote,
+  drawings,
+  emptyMessage,
+  renderActions,
+  renderBadge,
+}: {
+  title: string;
+  titleNote?: string;
+  drawings: DrawingRow[];
+  emptyMessage: string;
+  renderActions: (row: DrawingRow) => React.ReactNode;
+  renderBadge: (row: DrawingRow) => React.ReactNode;
+}) {
+  if (drawings.length === 0 && !emptyMessage) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {title}
+        </h2>
+        {drawings.length > 0 && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            {drawings.length}
+          </span>
+        )}
+        {titleNote && (
+          <span className="text-xs text-muted-foreground">· {titleNote}</span>
+        )}
+      </div>
+      {drawings.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          {emptyMessage}
+        </p>
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {visible.map((row) => (
-            <li key={row.id}>
-              <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-medium text-foreground">{row.name}</p>
-                    {!row.is_published && (
-                      <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                        Utkast
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {row.revision ? `Rev. ${row.revision} · ` : ""}
-                    {fmtDate(row.created_at)}
-                    {row.is_published && row.published_at && row.published_at !== row.created_at && (
-                      <> · Publisert {fmtDate(row.published_at)}</>
-                    )}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Link
-                    href={`/dashboard/projects/${project.id}/drawings/${row.id}`}
-                    title="Åpne i editor"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                  >
-                    <Pencil className="size-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Editor</span>
-                  </Link>
-                  <Link
-                    href={`/dashboard/projects/${project.id}/drawings/${row.id}/view`}
-                    title="Vis tegning"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                  >
-                    <Eye className="size-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Vis</span>
-                  </Link>
-                  {isAdmin && !row.is_published && (
-                    <form action={deleteDraftDrawing}>
-                      <input type="hidden" name="drawing_id" value={row.id} />
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-destructive/30 bg-background px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
-                      >
-                        Slett
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            </li>
+          {drawings.map((row) => (
+            <DrawingListItem
+              key={row.id}
+              row={row}
+              badge={renderBadge(row)}
+              actions={renderActions(row)}
+            />
           ))}
         </ul>
       )}

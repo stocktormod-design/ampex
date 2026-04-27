@@ -14,6 +14,7 @@ const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const ALLOWED_EXT = new Set(["pdf", "jpg", "jpeg", "png"]);
 const OVERLAY_TOOL_TYPES = new Set(["detector", "point", "line", "rect", "text"]);
 const OVERLAY_VISIBILITY = new Set(["all", "admins"]);
+const VALID_DISCIPLINES = new Set(["fire", "power", "low_voltage"]);
 const MAX_OVERLAY_PHOTO_BYTES = 2 * 1024 * 1024;
 
 type CompanyProfile = {
@@ -29,9 +30,14 @@ type AdminContext = {
 
 type DrawingOwnedRow = {
   id: string;
+  name: string;
   project_id: string;
   file_path: string;
   is_published: boolean;
+  drawing_status: string;
+  pipeline: string;
+  is_archived: boolean;
+  revision_group_id: string | null;
   projects: { company_id: string } | null;
 };
 
@@ -240,6 +246,8 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
 
   const drawingNameInput = String(formData.get("name") ?? "").trim();
   const revisionInput = String(formData.get("revision") ?? "").trim();
+  const disciplinesRaw = formData.getAll("disciplines").map((v) => String(v).trim());
+  const disciplines = disciplinesRaw.filter((d) => VALID_DISCIPLINES.has(d));
   const fileInput = formData.get("pdf_file");
 
   if (!(fileInput instanceof File) || fileInput.size === 0) {
@@ -294,9 +302,11 @@ export async function uploadDrawingPdf(projectId: string, formData: FormData) {
     file_path: objectPath,
     revision: revisionInput || null,
     uploaded_by: userId,
-    is_published: true,
-    published_at: new Date().toISOString(),
-    published_by: userId,
+    disciplines,
+    pipeline: "draft",
+    is_archived: false,
+    is_published: false,
+    drawing_status: "draft",
   });
 
   if (insertError) {
@@ -438,10 +448,43 @@ export async function publishOverlayItem(input: PublishOverlayInput) {
   return { ok: true as const, data };
 }
 
+/**
+ * Delete a published overlay item. Allowed for the creator or any company admin.
+ * Uses the user's own session so RLS enforces the ownership/role check.
+ */
+export async function deleteOverlayItem(overlayId: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Ikke innlogget" };
+
+  // Look up drawing/project for path revalidation
+  const { data: overlayRow } = await supabase
+    .from("drawing_overlays")
+    .select("id, drawing_id")
+    .eq("id", overlayId)
+    .maybeSingle();
+
+  if (!overlayRow) return { ok: false, error: "Element ikke funnet" };
+
+  const { error } = await supabase
+    .from("drawing_overlays")
+    .delete()
+    .eq("id", overlayId);
+
+  if (error) return { ok: false, error: error.message };
+
+  // Best-effort revalidation
+  const drawingId = (overlayRow as { id: string; drawing_id: string }).drawing_id;
+  revalidatePath(`/dashboard/projects`);
+  revalidatePath(`/dashboard/projects/[projectId]/drawings/${drawingId}`, "page");
+
+  return { ok: true };
+}
+
 async function getOwnedDrawing(adminClient: ReturnType<typeof createAdminClient>, drawingId: string, companyId: string) {
   const { data, error } = await adminClient
     .from("drawings")
-    .select("id, project_id, file_path, is_published, projects!inner(company_id)")
+    .select("id, name, project_id, file_path, is_published, drawing_status, pipeline, is_archived, revision_group_id, projects!inner(company_id)")
     .eq("id", drawingId)
     .maybeSingle();
 
@@ -515,12 +558,38 @@ export async function publishDrawing(formData: FormData) {
   }
 
   const projectId = owned.row.project_id;
+  const drawingName = owned.row.name;
+
+  // Auto-assign revision_group_id: find existing official drawings with the same name
+  let revisionGroupId = owned.row.revision_group_id;
+  if (!revisionGroupId) {
+    const { data: nameMatchRows } = await adminClient
+      .from("drawings")
+      .select("id, name, revision_group_id")
+      .eq("project_id", projectId)
+      .eq("pipeline", "official")
+      .neq("id", drawingId);
+
+    const nameMatch = (nameMatchRows ?? []).find(
+      (r) => (r as { name: string }).name.toLowerCase().trim() === drawingName.toLowerCase().trim()
+        && (r as { revision_group_id: string | null }).revision_group_id !== null
+    );
+
+    revisionGroupId = nameMatch
+      ? (nameMatch as { revision_group_id: string }).revision_group_id
+      : crypto.randomUUID();
+  }
+
   const { error } = await adminClient
     .from("drawings")
     .update({
+      pipeline: "official",
+      is_archived: false,
       is_published: true,
+      drawing_status: "official",
       published_at: new Date().toISOString(),
       published_by: userId,
+      revision_group_id: revisionGroupId,
     })
     .eq("id", drawingId);
 
@@ -548,7 +617,10 @@ export async function unpublishDrawing(formData: FormData) {
   const { error } = await adminClient
     .from("drawings")
     .update({
+      pipeline: "draft",
+      is_archived: false,
       is_published: false,
+      drawing_status: "draft",
       published_at: null,
       published_by: null,
     })
@@ -575,8 +647,8 @@ export async function deleteDraftDrawing(formData: FormData) {
   }
 
   const { row } = owned;
-  if (row.is_published) {
-    redirectProjectError(row.project_id, "Publiserte tegninger kan ikke slettes her");
+  if (row.pipeline !== "draft" || row.is_archived) {
+    redirectProjectError(row.project_id, "Kun aktive utkast kan slettes");
   }
 
   const { error: deleteError } = await adminClient
@@ -624,9 +696,74 @@ export async function convertProjectImagesToPdf(formData: FormData) {
   redirect(`${projectPath(projectId)}?success=converted-${convertedCount}`);
 }
 
+/** Archive a drawing — preserves its pipeline, just hides it from default views. */
+export async function archiveDrawing(formData: FormData) {
+  const drawingId = String(formData.get("drawing_id") ?? "").trim();
+  if (!drawingId) {
+    redirect("/dashboard/projects?error=Mangler+tegning");
+  }
+
+  const { companyId, adminClient } = await requireAdminContext();
+  const owned = await getOwnedDrawing(adminClient, drawingId, companyId);
+  if (!owned.ok) {
+    redirect(`/dashboard/projects?error=${encodeURIComponent(owned.error)}`);
+  }
+
+  const projectId = owned.row.project_id;
+  const { error } = await adminClient
+    .from("drawings")
+    .update({
+      is_archived: true,
+      is_published: false,
+      drawing_status: "archived",
+    })
+    .eq("id", drawingId);
+
+  if (error) redirectProjectError(projectId, error.message);
+
+  revalidatePath(projectPath(projectId));
+  redirect(`${projectPath(projectId)}?success=archived`);
+}
+
+/** Restore an archived drawing — returns to its original pipeline (draft or official). */
+export async function unarchiveDrawing(formData: FormData) {
+  const drawingId = String(formData.get("drawing_id") ?? "").trim();
+  if (!drawingId) {
+    redirect("/dashboard/projects?error=Mangler+tegning");
+  }
+
+  const { userId, companyId, adminClient } = await requireAdminContext();
+  const owned = await getOwnedDrawing(adminClient, drawingId, companyId);
+  if (!owned.ok) {
+    redirect(`/dashboard/projects?error=${encodeURIComponent(owned.error)}`);
+  }
+
+  const projectId = owned.row.project_id;
+  const restoredPipeline = owned.row.pipeline; // keep original pipeline
+
+  const { error } = await adminClient
+    .from("drawings")
+    .update({
+      is_archived: false,
+      is_published: restoredPipeline === "official",
+      drawing_status: restoredPipeline,
+      published_at: restoredPipeline === "official" ? new Date().toISOString() : null,
+      published_by: restoredPipeline === "official" ? userId : null,
+    })
+    .eq("id", drawingId);
+
+  if (error) redirectProjectError(projectId, error.message);
+
+  revalidatePath(projectPath(projectId));
+  const successCode = restoredPipeline === "official" ? "unarchived-official" : "unarchived-draft";
+  redirect(`${projectPath(projectId)}?success=${successCode}`);
+}
+
 /**
- * Begrens hvem som ser publiserte tegninger på prosjektet.
- * Ingen avkryssing = tom liste i DB = alle med prosjekttilgang (can_access_project) beholder tilgang.
+ * Update drawing/blueprint visibility for a project.
+ * Only manages project_blueprint_access — does NOT touch project_assignments.
+ * Adding a user to blueprint access also ensures they have project access (upsert),
+ * but removing them from blueprint access does NOT remove their project access.
  */
 export async function setProjectBlueprintAccess(formData: FormData) {
   const projectId = String(formData.get("project_id") ?? "").trim();
@@ -659,18 +796,12 @@ export async function setProjectBlueprintAccess(formData: FormData) {
     validIds = (validRows ?? []).map((r) => (r as { id: string }).id);
   }
 
-  // Clear existing blueprint access and project assignments in sync
+  // Clear existing blueprint access and re-insert selected
   const { error: delBpErr } = await adminClient
     .from("project_blueprint_access")
     .delete()
     .eq("project_id", projectId);
   if (delBpErr) redirectProjectError(projectId, delBpErr.message);
-
-  const { error: delAssignErr } = await adminClient
-    .from("project_assignments")
-    .delete()
-    .eq("project_id", projectId);
-  if (delAssignErr) redirectProjectError(projectId, delAssignErr.message);
 
   if (validIds.length > 0) {
     const { error: insBpErr } = await adminClient
@@ -678,11 +809,14 @@ export async function setProjectBlueprintAccess(formData: FormData) {
       .insert(validIds.map((user_id) => ({ project_id: projectId, user_id })));
     if (insBpErr) redirectProjectError(projectId, insBpErr.message);
 
-    // Grant project_assignments so users can actually see the project in their list
-    const { error: insAssignErr } = await adminClient
+    // Ensure newly-granted users have project access (only add, never remove)
+    const { error: upsertErr } = await adminClient
       .from("project_assignments")
-      .insert(validIds.map((user_id) => ({ project_id: projectId, user_id, assigned_by: userId })));
-    if (insAssignErr) redirectProjectError(projectId, insAssignErr.message);
+      .upsert(
+        validIds.map((user_id) => ({ project_id: projectId, user_id, assigned_by: userId })),
+        { onConflict: "project_id,user_id", ignoreDuplicates: true }
+      );
+    if (upsertErr) redirectProjectError(projectId, upsertErr.message);
   }
 
   revalidatePath(projectPath(projectId));
