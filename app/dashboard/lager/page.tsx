@@ -46,6 +46,7 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
   });
 
   const showForm = searchParams?.new === "1";
+  const totalItems = rows.reduce((sum, row) => sum + row.itemCount, 0);
 
   return (
     <div className="space-y-6">
@@ -73,80 +74,95 @@ export default async function LagerPage({ searchParams }: LagerPageProps) {
         </p>
       )}
 
-      {/* ── Create form (collapsible) ── */}
-      {showForm && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold">Nytt lager</h2>
-          <form action={createWarehouse} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <NativeLabel htmlFor="name">Navn *</NativeLabel>
-                <NativeInput
-                  id="name"
-                  name="name"
-                  required
-                  placeholder="Båtlager"
-                  autoComplete="off"
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="location">Plassering</NativeLabel>
-                <NativeInput id="location" name="location" placeholder="Kaia 4" autoComplete="off" />
-              </div>
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-8">
+          {rows.length === 0 ? (
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
+              <Package className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
+              <p className="text-sm font-medium text-muted-foreground">Ingen lagre ennå.</p>
+              {!showForm && (
+                <Link
+                  href="/dashboard/lager?new=1"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  <Plus className="size-3.5" />
+                  Opprett det første
+                </Link>
+              )}
             </div>
-            <div className="flex items-center gap-3">
-              <SubmitButton>Opprett lager</SubmitButton>
-              <Link
-                href="/dashboard/lager"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Avbryt
-              </Link>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ── Warehouse list ── */}
-      {rows.length === 0 ? (
-        <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
-          <Package className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
-          <p className="text-sm font-medium text-muted-foreground">Ingen lagre ennå.</p>
-          {!showForm && (
-            <Link
-              href="/dashboard/lager?new=1"
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              <Plus className="size-3.5" />
-              Opprett det første
-            </Link>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {rows.map((w) => (
+                <li key={w.id}>
+                  <Link
+                    href={`/dashboard/lager/${w.id}`}
+                    className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:px-5"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Package className="size-4 text-muted-foreground" aria-hidden />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-foreground">{w.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {w.location ? <span>{w.location} · </span> : null}
+                        {w.itemCount} vare{w.itemCount === 1 ? "" : "r"}
+                      </p>
+                    </div>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-      ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {rows.map((w) => (
-            <li key={w.id}>
-              <Link
-                href={`/dashboard/lager/${w.id}`}
-                className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:px-5"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Package className="size-4 text-muted-foreground" aria-hidden />
+
+        <div className="space-y-6 lg:col-span-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Lagre</p>
+              <p className="mt-1 text-xl font-semibold">{rows.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Varer totalt</p>
+              <p className="mt-1 text-xl font-semibold">{totalItems}</p>
+            </div>
+          </div>
+
+          {showForm && (
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="mb-4 text-base font-semibold">Nytt lager</h2>
+              <form action={createWarehouse} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="name">Navn *</NativeLabel>
+                    <NativeInput
+                      id="name"
+                      name="name"
+                      required
+                      placeholder="Båtlager"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="location">Plassering</NativeLabel>
+                    <NativeInput id="location" name="location" placeholder="Kaia 4" autoComplete="off" />
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">{w.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {w.location ? <span>{w.location} · </span> : null}
-                    {w.itemCount} vare{w.itemCount === 1 ? "" : "r"}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <SubmitButton>Opprett lager</SubmitButton>
+                  <Link
+                    href="/dashboard/lager"
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Avbryt
+                  </Link>
                 </div>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

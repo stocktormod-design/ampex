@@ -90,6 +90,9 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
       (p.description?.toLowerCase().includes(q) ?? false)
     );
   });
+  const planningCount = projects.filter((p) => p.status === "planning").length;
+  const activeCount = projects.filter((p) => p.status === "active").length;
+  const completedCount = projects.filter((p) => p.status === "completed").length;
 
   return (
     <div className="space-y-6">
@@ -119,136 +122,151 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         </p>
       )}
 
-      {/* ── Create form (collapsible) ── */}
-      {canManage && showForm && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold">Nytt prosjekt</h2>
-          <form action={createProject} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <NativeLabel htmlFor="name">Prosjektnavn *</NativeLabel>
-                <NativeInput
-                  id="name"
-                  name="name"
-                  required
-                  placeholder="Sykehjem Nordfløy"
-                  autoComplete="off"
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="status">Status</NativeLabel>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue="planning"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="planning">Planlegging</option>
-                  <option value="active">Aktiv</option>
-                  <option value="completed">Ferdig</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <NativeLabel htmlFor="description">Beskrivelse</NativeLabel>
-              <textarea
-                id="description"
-                name="description"
-                rows={2}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Kort beskrivelse (valgfritt)"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <SubmitButton>Opprett prosjekt</SubmitButton>
-              <Link
-                href="/dashboard/projects"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Avbryt
-              </Link>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ── Search + filter ── */}
-      <form
-        method="get"
-        className="flex flex-wrap gap-2"
-      >
-        {showForm && <input type="hidden" name="new" value="1" />}
-        <NativeInput
-          name="q"
-          defaultValue={searchParams?.q ?? ""}
-          placeholder="Søk i prosjekter..."
-          className="flex-1 min-w-[160px]"
-        />
-        <select
-          name="status"
-          defaultValue={statusFilter}
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="all">Alle statuser</option>
-          <option value="planning">Planlegging</option>
-          <option value="active">Aktiv</option>
-          <option value="completed">Ferdig</option>
-        </select>
-        <SubmitButton variant="outline" className="shrink-0">Søk</SubmitButton>
-      </form>
-
-      {/* ── Project list ── */}
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
-          <FolderKanban className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
-          <p className="text-sm font-medium text-muted-foreground">
-            {q || statusFilter !== "all" ? "Ingen prosjekter matcher søket." : "Ingen prosjekter ennå."}
-          </p>
-          {canManage && !showForm && (
-            <Link
-              href="/dashboard/projects?new=1"
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-8">
+          <form method="get" className="flex flex-wrap gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
+            {showForm && <input type="hidden" name="new" value="1" />}
+            <NativeInput
+              name="q"
+              defaultValue={searchParams?.q ?? ""}
+              placeholder="Søk i prosjekter..."
+              className="min-w-[160px] flex-1"
+            />
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Plus className="size-3.5" />
-              Opprett det første
-            </Link>
+              <option value="all">Alle statuser</option>
+              <option value="planning">Planlegging</option>
+              <option value="active">Aktiv</option>
+              <option value="completed">Ferdig</option>
+            </select>
+            <SubmitButton variant="outline" className="shrink-0">Søk</SubmitButton>
+          </form>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
+              <FolderKanban className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
+              <p className="text-sm font-medium text-muted-foreground">
+                {q || statusFilter !== "all" ? "Ingen prosjekter matcher søket." : "Ingen prosjekter ennå."}
+              </p>
+              {canManage && !showForm && (
+                <Link
+                  href="/dashboard/projects?new=1"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  <Plus className="size-3.5" />
+                  Opprett det første
+                </Link>
+              )}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {filtered.map((project) => (
+                <li key={project.id}>
+                  <Link
+                    href={`/dashboard/projects/${project.id}`}
+                    className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-foreground">{project.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {project.description ? (
+                          <span className="truncate">{project.description}</span>
+                        ) : null}
+                        {project.drawingCount > 0 && (
+                          <span className={project.description ? "ml-2" : ""}>
+                            {project.drawingCount} tegning{project.drawingCount === 1 ? "" : "er"}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        STATUS_COLOR[project.status] ?? STATUS_COLOR.planning
+                      }`}
+                    >
+                      {STATUS_LABEL[project.status] ?? project.status}
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-      ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {filtered.map((project) => (
-            <li key={project.id}>
-              <Link
-                href={`/dashboard/projects/${project.id}`}
-                className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:px-5"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">{project.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {project.description ? (
-                      <span className="truncate">{project.description}</span>
-                    ) : null}
-                    {project.drawingCount > 0 && (
-                      <span className={project.description ? "ml-2" : ""}>
-                        {project.drawingCount} tegning{project.drawingCount === 1 ? "" : "er"}
-                      </span>
-                    )}
-                  </p>
+
+        <div className="space-y-6 lg:col-span-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Planlegging</p>
+              <p className="mt-1 text-xl font-semibold">{planningCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Aktive</p>
+              <p className="mt-1 text-xl font-semibold">{activeCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Ferdige</p>
+              <p className="mt-1 text-xl font-semibold">{completedCount}</p>
+            </div>
+          </div>
+
+          {canManage && showForm && (
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="mb-4 text-base font-semibold">Nytt prosjekt</h2>
+              <form action={createProject} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="name">Prosjektnavn *</NativeLabel>
+                    <NativeInput
+                      id="name"
+                      name="name"
+                      required
+                      placeholder="Sykehjem Nordfløy"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="status">Status</NativeLabel>
+                    <select
+                      id="status"
+                      name="status"
+                      defaultValue="planning"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="planning">Planlegging</option>
+                      <option value="active">Aktiv</option>
+                      <option value="completed">Ferdig</option>
+                    </select>
+                  </div>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    STATUS_COLOR[project.status] ?? STATUS_COLOR.planning
-                  }`}
-                >
-                  {STATUS_LABEL[project.status] ?? project.status}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+                <div className="space-y-2">
+                  <NativeLabel htmlFor="description">Beskrivelse</NativeLabel>
+                  <textarea
+                    id="description"
+                    name="description"
+                    rows={2}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="Kort beskrivelse (valgfritt)"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <SubmitButton>Opprett prosjekt</SubmitButton>
+                  <Link
+                    href="/dashboard/projects"
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Avbryt
+                  </Link>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

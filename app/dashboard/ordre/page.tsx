@@ -114,6 +114,11 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     .eq("company_id", profile.company_id)
     .order("created_at", { ascending: true });
   const templates = (templatesData ?? []) as { id: string; name: string }[];
+  const activeCount = rows.filter((row) => row.status === "active" || row.status === "awaiting_installer").length;
+  const finishedCount = rows.filter(
+    (row) => row.status === "finished" || row.status === "approved" || row.status === "rejected",
+  ).length;
+  const archivedCount = rows.filter((row) => row.status === "archived").length;
 
   return (
     <div className="space-y-6">
@@ -144,166 +149,184 @@ export default async function OrdersPage({ searchParams }: PageProps) {
         </p>
       )}
 
-      {showForm && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold">Ny ordre</h2>
-          <form action={createOrder} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <NativeLabel htmlFor="order-title">Tittel</NativeLabel>
-                <NativeInput id="order-title" name="title" required autoFocus />
-              </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="order-type">Type</NativeLabel>
-                <select
-                  id="order-type"
-                  name="type"
-                  defaultValue="bolig"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="bolig">Bolig</option>
-                  <option value="maritim">Maritim</option>
-                  <option value="kompleks">Kompleks</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <NativeLabel htmlFor="order-customer">Kunde</NativeLabel>
-                <select
-                  id="order-customer"
-                  name="customer_id"
-                  required
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Velg kunde</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <NativeLabel htmlFor="order-installer">Installatør</NativeLabel>
-                <select
-                  id="order-installer"
-                  name="assigned_installer_id"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Velg senere</option>
-                  {installers.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.full_name?.trim() || "Uten navn"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <NativeLabel htmlFor="order-risk-template">Risikomal</NativeLabel>
-              <select
-                id="order-risk-template"
-                name="risk_template_id"
-                required
-                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Velg risikomal</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Denne malen brukes i risikovurderingen for ordren.
-              </p>
-              {templates.length === 0 && (
-                <p className="text-xs text-destructive">
-                  Ingen risikomaler funnet. Opprett mal under Innstillinger → Sjekklister.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <NativeLabel htmlFor="order-description">Hva gjelder ordren?</NativeLabel>
-              <textarea
-                id="order-description"
-                name="description"
-                rows={3}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <SubmitButton>Opprett ordre</SubmitButton>
-              <Link href="/dashboard/ordre" className="text-sm text-muted-foreground hover:text-foreground">
-                Avbryt
-              </Link>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-8">
+          <form method="get" className="flex flex-wrap gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
+            {showForm && <input type="hidden" name="new" value="1" />}
+            <NativeInput
+              name="q"
+              defaultValue={searchParams?.q ?? ""}
+              placeholder="Søk på ordre eller kunde..."
+              className="min-w-[12rem] flex-1"
+            />
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="active">Aktive</option>
+              <option value="finished">Ferdige</option>
+              <option value="archived">Arkiv</option>
+            </select>
+            <SubmitButton variant="outline">Filtrer</SubmitButton>
           </form>
 
-          <div className="mt-6 border-t pt-4">
-            <h3 className="mb-2 text-sm font-semibold">Ny kunde (hurtig)</h3>
-            <form action={createCustomerInline} className="grid gap-3 sm:grid-cols-2">
-              <NativeInput name="name" placeholder="Navn" required />
-              <NativeInput name="phone" placeholder="Mobil" />
-              <NativeInput name="email" type="email" placeholder="E-post" />
-              <NativeInput name="address" placeholder="Adresse" />
-              <div className="sm:col-span-2">
-                <SubmitButton variant="outline">Legg til kunde</SubmitButton>
-              </div>
-            </form>
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
+              <ClipboardList className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
+              <p className="text-sm text-muted-foreground">Ingen ordre matcher filteret.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {filtered.map((row) => (
+                <li key={row.id}>
+                  <Link
+                    href={`/dashboard/ordre/${row.id}`}
+                    className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/50 sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{row.title}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {row.order_customers?.name ?? "Ukjent kunde"} · {statusLabel(row.status)} · {row.type}
+                      </p>
+                    </div>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="space-y-6 lg:col-span-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Aktive</p>
+              <p className="mt-1 text-xl font-semibold">{activeCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Ferdige</p>
+              <p className="mt-1 text-xl font-semibold">{finishedCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">Arkiv</p>
+              <p className="mt-1 text-xl font-semibold">{archivedCount}</p>
+            </div>
           </div>
-        </div>
-      )}
 
-      <form method="get" className="flex flex-wrap gap-2">
-        {showForm && <input type="hidden" name="new" value="1" />}
-        <NativeInput
-          name="q"
-          defaultValue={searchParams?.q ?? ""}
-          placeholder="Søk på ordre eller kunde..."
-          className="flex-1 min-w-[12rem]"
-        />
-        <select
-          name="status"
-          defaultValue={statusFilter}
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="active">Aktive</option>
-          <option value="finished">Ferdige</option>
-          <option value="archived">Arkiv</option>
-        </select>
-        <SubmitButton variant="outline">Filtrer</SubmitButton>
-      </form>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-border bg-muted/30 px-4 py-16 text-center">
-          <ClipboardList className="mx-auto mb-3 size-8 text-muted-foreground/40" aria-hidden />
-          <p className="text-sm text-muted-foreground">Ingen ordre matcher filteret.</p>
-        </div>
-      ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {filtered.map((row) => (
-            <li key={row.id}>
-              <Link
-                href={`/dashboard/ordre/${row.id}`}
-                className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/50 sm:px-5"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{row.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {row.order_customers?.name ?? "Ukjent kunde"} · {statusLabel(row.status)} · {row.type}
-                  </p>
+          {showForm && (
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="mb-4 text-base font-semibold">Ny ordre</h2>
+              <form action={createOrder} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="order-title">Tittel</NativeLabel>
+                    <NativeInput id="order-title" name="title" required autoFocus />
+                  </div>
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="order-type">Type</NativeLabel>
+                    <select
+                      id="order-type"
+                      name="type"
+                      defaultValue="bolig"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="bolig">Bolig</option>
+                      <option value="maritim">Maritim</option>
+                      <option value="kompleks">Kompleks</option>
+                    </select>
+                  </div>
                 </div>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="order-customer">Kunde</NativeLabel>
+                    <select
+                      id="order-customer"
+                      name="customer_id"
+                      required
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Velg kunde</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <NativeLabel htmlFor="order-installer">Installatør</NativeLabel>
+                    <select
+                      id="order-installer"
+                      name="assigned_installer_id"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Velg senere</option>
+                      {installers.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.full_name?.trim() || "Uten navn"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <NativeLabel htmlFor="order-risk-template">Risikomal</NativeLabel>
+                  <select
+                    id="order-risk-template"
+                    name="risk_template_id"
+                    required
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">Velg risikomal</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {templates.length === 0 && (
+                    <p className="text-xs text-destructive">
+                      Ingen risikomaler funnet. Opprett mal under Innstillinger → Sjekklister.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <NativeLabel htmlFor="order-description">Hva gjelder ordren?</NativeLabel>
+                  <textarea
+                    id="order-description"
+                    name="description"
+                    rows={3}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <SubmitButton>Opprett ordre</SubmitButton>
+                  <Link href="/dashboard/ordre" className="text-sm text-muted-foreground hover:text-foreground">
+                    Avbryt
+                  </Link>
+                </div>
+              </form>
+
+              <div className="mt-6 border-t pt-4">
+                <h3 className="mb-2 text-sm font-semibold">Ny kunde (hurtig)</h3>
+                <form action={createCustomerInline} className="grid gap-3 sm:grid-cols-2">
+                  <NativeInput name="name" placeholder="Navn" required />
+                  <NativeInput name="phone" placeholder="Mobil" />
+                  <NativeInput name="email" type="email" placeholder="E-post" />
+                  <NativeInput name="address" placeholder="Adresse" />
+                  <div className="sm:col-span-2">
+                    <SubmitButton variant="outline">Legg til kunde</SubmitButton>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
