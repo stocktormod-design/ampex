@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardNavLinks, MobileBottomNav } from "@/components/dashboard-nav";
 import { createClient } from "@/lib/supabase/server";
-import { canViewInstallerInbox as roleCanViewInstallerInbox } from "@/lib/roles";
+import { canViewInstallerInbox as roleCanViewInstallerInbox, isAdminRole } from "@/lib/roles";
 
 type ProfileRow = {
   company_id: string | null;
@@ -41,6 +41,7 @@ export default async function DashboardLayout({
   const canManageLager  = profile?.role === "owner" || profile?.role === "admin";
   const canViewInstallerInbox = profile?.role ? roleCanViewInstallerInbox(profile.role) : false;
   const canManageRiskModules = ["owner", "admin", "installator"].includes(profile?.role ?? "");
+  const canManageRegnskap = isAdminRole(profile?.role ?? "");
 
   async function signOut() {
     "use server";
@@ -74,6 +75,7 @@ export default async function DashboardLayout({
             canManageLager={canManageLager}
             canViewInstallerInbox={canViewInstallerInbox}
             canManageRiskModules={canManageRiskModules}
+            canManageRegnskap={canManageRegnskap}
           />
         </div>
 
@@ -114,6 +116,7 @@ export default async function DashboardLayout({
         canManageUsers={canManageUsers}
         canViewInstallerInbox={canViewInstallerInbox}
         canManageRiskModules={canManageRiskModules}
+        canManageRegnskap={canManageRegnskap}
         signOut={signOut}
       />
     </div>

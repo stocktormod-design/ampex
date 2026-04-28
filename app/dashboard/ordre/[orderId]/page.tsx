@@ -14,6 +14,7 @@ import {
   submitOrderForInstaller,
   updateOrderStatus,
 } from "@/app/dashboard/ordre/actions";
+import { queueManualSync } from "@/app/dashboard/regnskap/actions";
 import { NativeInput } from "@/components/ui/native-input";
 import { NativeLabel } from "@/components/ui/native-label";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -248,6 +249,13 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     ? (order.risk_assessment_templates[0]?.name ?? null)
     : (order.risk_assessment_templates?.name ?? null);
 
+  const { data: erpIntegration } = await adminClient
+    .from("company_integrations")
+    .select("id, provider")
+    .eq("company_id", profile.company_id)
+    .eq("status", "active")
+    .maybeSingle();
+
   return (
     <div className="space-y-6">
       <div>
@@ -364,6 +372,15 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
                 </select>
                 <SubmitButton variant="outline">Oppdater status</SubmitButton>
               </form>
+
+              {erpIntegration && (
+                <form action={queueManualSync} className="mt-3">
+                  <input type="hidden" name="integration_id" value={erpIntegration.id} />
+                  <input type="hidden" name="order_id" value={order.id} />
+                  <input type="hidden" name="return_to" value={`/dashboard/ordre/${order.id}`} />
+                  <SubmitButton variant="outline">Send til ERP</SubmitButton>
+                </form>
+              )}
             </div>
           )}
 

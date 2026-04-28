@@ -24,6 +24,7 @@ type BaseNavProps = {
   canManageLager: boolean;
   canViewInstallerInbox: boolean;
   canManageRiskModules: boolean;
+  canManageRegnskap: boolean;
 };
 
 type MobileNavProps = BaseNavProps & {
@@ -41,6 +42,8 @@ function buildDesktopLinks(props: BaseNavProps): NavItem[] {
   if (props.canManageLager) links.push({ href: "/dashboard/lager", label: "Lager" });
   if (props.canManageUsers) links.push({ href: "/dashboard/settings/users", label: "Brukere" });
   if (props.canManageRiskModules) links.push({ href: "/dashboard/settings/risk-modules", label: "Sjekklister" });
+  // Regnskap vises kun på desktop (ikke i mobilnavigasjon)
+  if (props.canManageRegnskap) links.push({ href: "/dashboard/regnskap", label: "Regnskap" });
   return links;
 }
 
