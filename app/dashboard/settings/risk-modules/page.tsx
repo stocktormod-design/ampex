@@ -117,6 +117,10 @@ export default async function RiskModulesPage({ searchParams }: PageProps) {
 
       {/* ── Template list / selector ── */}
       <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          <strong className="text-foreground">Steg:</strong> 1) Velg mal 2) Legg til seksjoner 3) Legg til sjekkpunkter.
+          Ordre viser kun sjekklister fra malen som er valgt på ordren.
+        </div>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">Maler</h2>
           <form action={createTemplate} className="flex items-center gap-2">
@@ -194,7 +198,7 @@ export default async function RiskModulesPage({ searchParams }: PageProps) {
               )}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Denne malen brukes i alle valgte ordre.
+              Denne malen brukes i ordre som har denne risikomalen valgt.
             </p>
           </div>
         )}
@@ -236,6 +240,7 @@ export default async function RiskModulesPage({ searchParams }: PageProps) {
             <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-4 py-3">
               <form action={updateModuleName} className="flex min-w-0 flex-1 items-center gap-2">
                 <input type="hidden" name="module_id" value={mod.id} />
+                <input type="hidden" name="template_id" value={activeTemplate.id} />
                 <input
                   name="name"
                   defaultValue={mod.name}
@@ -259,6 +264,7 @@ export default async function RiskModulesPage({ searchParams }: PageProps) {
 
               <form action={deleteModule}>
                 <input type="hidden" name="module_id" value={mod.id} />
+                <input type="hidden" name="template_id" value={activeTemplate.id} />
                 <button
                   type="submit"
                   title="Slett modul"
@@ -291,6 +297,7 @@ export default async function RiskModulesPage({ searchParams }: PageProps) {
                       className="group flex items-center gap-2 px-4 py-2"
                     >
                       <input type="hidden" name="item_id" value={item.id} />
+                      <input type="hidden" name="template_id" value={activeTemplate.id} />
                       <input type="hidden" name="current_required" value={item.is_required ? "1" : "0"} />
 
                       {/* Required / optional badge */}

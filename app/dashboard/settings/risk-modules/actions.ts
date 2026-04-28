@@ -87,6 +87,7 @@ export async function createModule(formData: FormData) {
 export async function updateModuleName(formData: FormData) {
   const { companyId, adminClient } = await requirePrivilegedContext();
   const moduleId = String(formData.get("module_id") ?? "").trim();
+  const templateId = String(formData.get("template_id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   if (!moduleId || !name) redirect(`${BASE}?error=Modulnavn+er+påkrevd`);
 
@@ -95,13 +96,15 @@ export async function updateModuleName(formData: FormData) {
     .update({ name })
     .eq("id", moduleId)
     .eq("company_id", companyId);
-  if (error) redirect(`${BASE}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${templateId ? baseWithTemplate(templateId) : BASE}&error=${encodeURIComponent(error.message)}`);
+  if (templateId) redirect(baseWithTemplate(templateId));
   redirect(BASE);
 }
 
 export async function deleteModule(formData: FormData) {
   const { companyId, adminClient } = await requirePrivilegedContext();
   const moduleId = String(formData.get("module_id") ?? "").trim();
+  const templateId = String(formData.get("template_id") ?? "").trim();
   if (!moduleId) redirect(`${BASE}?error=Ugyldig+modul`);
 
   const { error } = await adminClient
@@ -109,7 +112,8 @@ export async function deleteModule(formData: FormData) {
     .delete()
     .eq("id", moduleId)
     .eq("company_id", companyId);
-  if (error) redirect(`${BASE}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${templateId ? baseWithTemplate(templateId) : BASE}&error=${encodeURIComponent(error.message)}`);
+  if (templateId) redirect(baseWithTemplate(templateId));
   redirect(BASE);
 }
 
@@ -152,6 +156,7 @@ export async function addModuleItem(formData: FormData) {
 export async function updateModuleItem(formData: FormData) {
   const { companyId, adminClient } = await requirePrivilegedContext();
   const itemId = String(formData.get("item_id") ?? "").trim();
+  const templateId = String(formData.get("template_id") ?? "").trim();
   const text = String(formData.get("text") ?? "").trim();
   if (!itemId || !text) redirect(`${BASE}?error=Tekst+er+påkrevd`);
 
@@ -162,13 +167,15 @@ export async function updateModuleItem(formData: FormData) {
     .from("risk_assessment_module_items")
     .update({ text })
     .eq("id", itemId);
-  if (error) redirect(`${BASE}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${templateId ? baseWithTemplate(templateId) : BASE}&error=${encodeURIComponent(error.message)}`);
+  if (templateId) redirect(baseWithTemplate(templateId));
   redirect(BASE);
 }
 
 export async function toggleItemRequired(formData: FormData) {
   const { companyId, adminClient } = await requirePrivilegedContext();
   const itemId = String(formData.get("item_id") ?? "").trim();
+  const templateId = String(formData.get("template_id") ?? "").trim();
   const currentRequired = formData.get("current_required") === "1";
   if (!itemId) redirect(`${BASE}?error=Ugyldig+punkt`);
 
@@ -179,13 +186,15 @@ export async function toggleItemRequired(formData: FormData) {
     .from("risk_assessment_module_items")
     .update({ is_required: !currentRequired })
     .eq("id", itemId);
-  if (error) redirect(`${BASE}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${templateId ? baseWithTemplate(templateId) : BASE}&error=${encodeURIComponent(error.message)}`);
+  if (templateId) redirect(baseWithTemplate(templateId));
   redirect(BASE);
 }
 
 export async function deleteModuleItem(formData: FormData) {
   const { companyId, adminClient } = await requirePrivilegedContext();
   const itemId = String(formData.get("item_id") ?? "").trim();
+  const templateId = String(formData.get("template_id") ?? "").trim();
   if (!itemId) redirect(`${BASE}?error=Ugyldig+punkt`);
 
   const ok = await verifyItemOwnership(adminClient, itemId, companyId);
@@ -195,7 +204,8 @@ export async function deleteModuleItem(formData: FormData) {
     .from("risk_assessment_module_items")
     .delete()
     .eq("id", itemId);
-  if (error) redirect(`${BASE}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${templateId ? baseWithTemplate(templateId) : BASE}&error=${encodeURIComponent(error.message)}`);
+  if (templateId) redirect(baseWithTemplate(templateId));
   redirect(BASE);
 }
 

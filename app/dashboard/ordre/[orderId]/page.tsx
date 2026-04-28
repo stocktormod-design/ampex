@@ -459,6 +459,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           <div className="mt-5">
             <RiskAssessmentForm
               orderId={order.id}
+              templateName={templateName}
               modules={riskModules}
               existingPayload={risk?.payload ?? null}
               isCompleted={riskDone}

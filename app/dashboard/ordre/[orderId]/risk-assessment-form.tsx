@@ -54,12 +54,13 @@ const fieldCls =
 
 type Props = {
   orderId: string;
+  templateName: string | null;
   modules: RiskModule[];
   existingPayload: Record<string, unknown> | null;
   isCompleted: boolean;
 };
 
-export function RiskAssessmentForm({ orderId, modules, existingPayload, isCompleted }: Props) {
+export function RiskAssessmentForm({ orderId, templateName, modules, existingPayload, isCompleted }: Props) {
   const [state, setState] = useState<RiskPayload>(() => parsePayload(existingPayload, modules));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [allExpanded, setAllExpanded] = useState(true);
@@ -140,6 +141,9 @@ export function RiskAssessmentForm({ orderId, modules, existingPayload, isComple
         <Settings className="mx-auto mb-3 size-9 text-muted-foreground/30" />
         <p className="text-sm font-semibold">Ingen sjekklistemoduler opprettet</p>
         <p className="mt-1 text-xs text-muted-foreground">
+          {templateName
+            ? `Malen "${templateName}" har ingen seksjoner ennå.`
+            : "Denne ordren mangler risikomal eller malen har ingen seksjoner."}{" "}
           Opprett moduler under Innstillinger → Sjekklister.
         </p>
         <a
