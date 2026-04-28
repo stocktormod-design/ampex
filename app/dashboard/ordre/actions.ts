@@ -218,6 +218,39 @@ export async function updateOrderStatus(formData: FormData) {
   redirect(`${orderPath(orderId)}?success=status-updated`);
 }
 
+export async function updateOrderRiskTemplate(formData: FormData) {
+  const { adminClient, companyId } = await requireAdminContext();
+  const orderId = String(formData.get("order_id") ?? "").trim();
+  const riskTemplateId = String(formData.get("risk_template_id") ?? "").trim();
+  if (!orderId || !riskTemplateId) {
+    redirect("/dashboard/ordre?error=Mangler+ordre+eller+risikomal");
+  }
+
+  const check = await ensureOrderInCompany(adminClient, companyId, orderId);
+  if (!check.ok) redirect(`/dashboard/ordre?error=${encodeURIComponent(check.error)}`);
+
+  const { data: templateData } = await adminClient
+    .from("risk_assessment_templates")
+    .select("id")
+    .eq("id", riskTemplateId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!templateData) {
+    redirect(`${orderPath(orderId)}?tab=risk&error=Risikomal+ikke+funnet+for+dette+firmaet`);
+  }
+
+  const { error } = await adminClient
+    .from("orders")
+    .update({ risk_template_id: riskTemplateId })
+    .eq("id", orderId)
+    .eq("company_id", companyId);
+  if (error) redirect(`${orderPath(orderId)}?tab=risk&error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/dashboard/ordre");
+  revalidatePath(orderPath(orderId));
+  redirect(`${orderPath(orderId)}?tab=risk&success=risk-template-updated`);
+}
+
 export async function saveRiskAssessment(formData: FormData) {
   const { adminClient, companyId, userId } = await requireContext();
   const orderId = String(formData.get("order_id") ?? "").trim();

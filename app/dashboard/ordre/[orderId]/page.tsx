@@ -12,6 +12,7 @@ import {
   installerDecideOrder,
   saveDocumentationSection,
   submitOrderForInstaller,
+  updateOrderRiskTemplate,
   updateOrderStatus,
 } from "@/app/dashboard/ordre/actions";
 import { queueManualSync } from "@/app/dashboard/regnskap/actions";
@@ -164,6 +165,13 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     .eq("role", "installator")
     .order("full_name", { ascending: true });
   const installers = (installersData ?? []) as { id: string; full_name: string | null }[];
+
+  const { data: templatesData } = await supabase
+    .from("risk_assessment_templates")
+    .select("id, name")
+    .eq("company_id", profile.company_id)
+    .order("created_at", { ascending: true });
+  const templates = (templatesData ?? []) as { id: string; name: string }[];
 
   const { data: inboxData } = await supabase
     .from("installer_inbox_items")
@@ -451,19 +459,56 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
       )}
 
       {activeTab === "risk" && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-semibold">Sikker Jobb Analyse — {order.type}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Fullfør denne før timer, materialer og dokumentasjon kan registreres.
-          </p>
-          <div className="mt-5">
-            <RiskAssessmentForm
-              orderId={order.id}
-              templateName={templateName}
-              modules={riskModules}
-              existingPayload={risk?.payload ?? null}
-              isCompleted={riskDone}
-            />
+        <div className="space-y-4">
+          {canManage && (
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-base font-semibold">Risikomal for denne ordren</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Velg hvilken sjekkliste-mal som skal brukes i risikovurderingen.
+              </p>
+              {templates.length > 0 ? (
+                <form action={updateOrderRiskTemplate} className="mt-3 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="order_id" value={order.id} />
+                  <div className="space-y-1">
+                    <NativeLabel htmlFor="order-risk-template-inline">Risikomal</NativeLabel>
+                    <select
+                      id="order-risk-template-inline"
+                      name="risk_template_id"
+                      defaultValue={order.risk_template_id ?? ""}
+                      className="h-10 min-w-[20rem] rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="" disabled>Velg risikomal</option>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <SubmitButton variant="outline">Bruk mal</SubmitButton>
+                </form>
+              ) : (
+                <p className="mt-3 text-sm text-destructive">
+                  Ingen risikomaler funnet. Opprett mal under Innstillinger → Sjekklister.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-base font-semibold">Sikker Jobb Analyse — {order.type}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Fullfør denne før timer, materialer og dokumentasjon kan registreres.
+            </p>
+            <div className="mt-5">
+              <RiskAssessmentForm
+                orderId={order.id}
+                templateName={templateName}
+                modules={riskModules}
+                existingPayload={risk?.payload ?? null}
+                isCompleted={riskDone}
+              />
+            </div>
           </div>
         </div>
       )}
