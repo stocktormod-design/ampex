@@ -104,7 +104,7 @@ export default async function DashboardLayout({
         /* leave room for mobile bottom nav */
         style={{ paddingBottom: "calc(3.75rem + env(safe-area-inset-bottom, 0px))" }}
       >
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 sm:[padding-bottom:2rem]">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10 sm:[padding-bottom:2rem]">
           {children}
         </div>
       </main>

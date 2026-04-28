@@ -11,6 +11,7 @@ type Props = {
 export function ReceiptImportPanel({ defaultSupplierName }: Props) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [receiptText, setReceiptText] = useState("");
+  const [supplierName, setSupplierName] = useState(defaultSupplierName);
 
   const estimatedLines = useMemo(() => {
     return receiptText
@@ -68,14 +69,35 @@ export function ReceiptImportPanel({ defaultSupplierName }: Props) {
       </div>
 
       <form action={importReceiptText} className="mt-4 grid gap-3 sm:grid-cols-4">
+        <div className="sm:col-span-4">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Leverandør</p>
+          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+            {["Elektroimportøren", "Ahlsell", "Onninen", "Solar"].map((supplier) => (
+              <button
+                key={supplier}
+                type="button"
+                onClick={() => setSupplierName(supplier)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  supplierName === supplier
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {supplier}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" name="supplier_name" value={supplierName} />
+        </div>
+
         <div className="space-y-1 sm:col-span-2">
           <label htmlFor="receipt_supplier_name" className="text-xs font-medium text-muted-foreground">
-            Leverandør
+            Valgt leverandør
           </label>
           <input
             id="receipt_supplier_name"
-            name="supplier_name"
-            defaultValue={defaultSupplierName}
+            value={supplierName}
+            onChange={(event) => setSupplierName(event.target.value)}
             placeholder="f.eks. Elektroimportøren"
             className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             required

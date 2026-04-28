@@ -325,15 +325,35 @@ export default async function RegnskapPage({ searchParams }: PageProps) {
         </p>
 
         <form action={createPurchaseOrder} className="grid gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-4">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Leverandør</p>
+            <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+              <label className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-foreground has-[:checked]:bg-background has-[:checked]:shadow-sm">
+                <input type="radio" name="supplier_name" value="Elektroimportøren" defaultChecked className="sr-only" />
+                Elektroimportøren
+              </label>
+              <label className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-foreground has-[:checked]:bg-background has-[:checked]:shadow-sm">
+                <input type="radio" name="supplier_name" value="Ahlsell" className="sr-only" />
+                Ahlsell
+              </label>
+              <label className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-foreground has-[:checked]:bg-background has-[:checked]:shadow-sm">
+                <input type="radio" name="supplier_name" value="Onninen" className="sr-only" />
+                Onninen
+              </label>
+              <label className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-foreground has-[:checked]:bg-background has-[:checked]:shadow-sm">
+                <input type="radio" name="supplier_name" value="Solar" className="sr-only" />
+                Solar
+              </label>
+            </div>
+          </div>
+
           <div className="space-y-1 sm:col-span-2">
-            <label htmlFor="supplier_name" className="text-xs font-medium text-muted-foreground">Leverandør</label>
+            <label htmlFor="supplier_note" className="text-xs font-medium text-muted-foreground">Leverandørnotat (valgfritt)</label>
             <input
-              id="supplier_name"
-              name="supplier_name"
-              defaultValue="Ahlsell"
-              placeholder="f.eks. Ahlsell, Onninen, Solar"
+              id="supplier_note"
+              name="supplier_note"
+              placeholder="f.eks. proffkonto, filial eller referanse"
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              required
             />
           </div>
           <div className="space-y-1 sm:col-span-2">
